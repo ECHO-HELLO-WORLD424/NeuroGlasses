@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Base64
 import android.util.Log
+import com.patrick.neuroglasses.R
 import com.rokid.cxr.client.extend.CxrApi
 import com.rokid.cxr.client.extend.listeners.CustomViewListener
 import com.rokid.cxr.client.extend.infos.IconInfo
@@ -190,14 +191,8 @@ class CustomSceneHelper(
         }
 
         try {
-            // Load the AI icon from drawable resources
-            val resourceId = context.resources.getIdentifier("ai_icon_small", "drawable", context.packageName)
-            if (resourceId == 0) {
-                Log.e(appTag, "AI icon resource not found")
-                return ValueUtil.CxrStatus.REQUEST_FAILED
-            }
-
-            val bitmap = BitmapFactory.decodeResource(context.resources, resourceId)
+            // Load the AI icon from drawable resources using R identifier
+            val bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.ai_icon_small)
             if (bitmap == null) {
                 Log.e(appTag, "Failed to decode AI icon bitmap")
                 return ValueUtil.CxrStatus.REQUEST_FAILED
