@@ -7,6 +7,7 @@ import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -63,6 +64,15 @@ data class AsrResponse(
 )
 
 /**
+ * Data class for TTS API request
+ */
+data class TtsRequest(
+    val model: String,
+    val input: String,
+    val voice: String
+)
+
+/**
  * OpenAI Helper
  * Handles AI-related API calls including ASR (speech-to-text) and OpenAI chat completion
  */
@@ -76,6 +86,7 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
     private val gson = Gson()
     private val chatApiUrl = "https://api.siliconflow.cn/v1/chat/completions"
     private val asrApiUrl = "https://api.siliconflow.cn/v1/audio/transcriptions"
+    private val ttsApiUrl = "https://api.siliconflow.cn/v1/audio/speech"
     private val apiKey = "sk-vfpzsggsnvzztaqlvznxhyfgrcccxwdecdbdulkuexvlzdld"
 
     /**
@@ -105,6 +116,18 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
          * @param error Error message
          */
         fun onOpenAIFailed(error: String)
+
+        /**
+         * Called when TTS audio file is ready
+         * @param audioFile The generated audio file
+         */
+        fun onTtsComplete(audioFile: File)
+
+        /**
+         * Called when TTS processing fails
+         * @param error Error message
+         */
+        fun onTtsFailed(error: String)
     }
 
     private var listener: OpenAIListener? = null
@@ -138,7 +161,7 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
                     .addFormDataPart(
                         "file",
                         audioFile.name,
-                        RequestBody.create("audio/wav".toMediaType(), audioFile)
+                        audioFile.asRequestBody("audio/wav".toMediaType())
                     )
                     .build()
 
@@ -292,6 +315,76 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
         val byteArray = byteArrayOutputStream.toByteArray()
         return Base64.encodeToString(byteArray, Base64.NO_WRAP)
+    }
+
+    /**
+     * Call TTS API to convert text to speech
+     * @param text The text to convert to speech
+     * @param outputDir The directory to save the audio file
+     */
+    fun callTtsAPI(text: String, outputDir: File) {
+        Log.d(appTag, "TTS API called with text: $text")
+
+        if (!outputDir.exists()) {
+            outputDir.mkdirs()
+        }
+
+        Thread {
+            try {
+                // Create the TTS request
+                val request = TtsRequest(
+                    model = "IndexTeam/IndexTTS-2",
+                    input = text,
+                    voice = "speech:neuro-glasses:d1jud8rk20jc738kdhng:cjnfwzkhoeaxofdnrvrz"
+                )
+
+                // Convert request to JSON
+                val jsonBody = gson.toJson(request)
+                Log.d(appTag, "TTS Request JSON: $jsonBody")
+
+                // Create HTTP request
+                val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
+                val httpRequest = Request.Builder()
+                    .url(ttsApiUrl)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Authorization", "Bearer $apiKey")
+                    .post(requestBody)
+                    .build()
+
+                // Execute the request
+                client.newCall(httpRequest).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        val errorBody = response.body?.string() ?: "Unknown error"
+                        Log.e(appTag, "TTS API call failed: ${response.code} - $errorBody")
+                        listener?.onTtsFailed("TTS API call failed: ${response.code}")
+                        return@Thread
+                    }
+
+                    // Save the audio data to file
+                    val audioBytes = response.body?.bytes()
+                    if (audioBytes != null && audioBytes.isNotEmpty()) {
+                        val timestamp = System.currentTimeMillis()
+                        val audioFile = File(outputDir, "tts_result_$timestamp.mp3")
+
+                        audioFile.outputStream().use { fileOut ->
+                            fileOut.write(audioBytes)
+                        }
+
+                        Log.d(appTag, "TTS audio saved to: ${audioFile.absolutePath} (${audioBytes.size} bytes)")
+                        listener?.onTtsComplete(audioFile)
+                    } else {
+                        Log.e(appTag, "Empty TTS response body")
+                        listener?.onTtsFailed("Empty audio response")
+                    }
+                }
+            } catch (e: IOException) {
+                Log.e(appTag, "Network error during TTS: ${e.message}", e)
+                listener?.onTtsFailed("Network error: ${e.message}")
+            } catch (e: Exception) {
+                Log.e(appTag, "Error calling TTS API: ${e.message}", e)
+                listener?.onTtsFailed("Error: ${e.message}")
+            }
+        }.start()
     }
 
     /**

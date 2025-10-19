@@ -118,7 +118,7 @@ class AITestActivity : AppCompatActivity() {
                     capturedImageView.setImageBitmap(bitmap)
                     capturedImageView.visibility = View.VISIBLE
                     updateProcessingStatus("Image captured: ${width}x${height}")
-                    Log.i(appTag, "Photo captured successfully: ${width}x${height}, ${dataSize} bytes")
+                    Log.i(appTag, "Photo captured successfully: ${width}x${height}, $dataSize bytes")
                 }
             }
 
@@ -206,8 +206,14 @@ class AITestActivity : AppCompatActivity() {
                 runOnUiThread {
                     updateProcessingStatus("AI response received")
                     Log.i(appTag, "OpenAI response: $response")
-                    // Display result
-                    displayResultInCustomUI(response)
+
+                    // Store the response
+                    lastResultText = response
+
+                    // Convert response to speech
+                    updateProcessingStatus("Converting to speech...")
+                    val audioDir = getExternalFilesDir("tts_audio") ?: filesDir
+                    openAIHelper.callTtsAPI(response, audioDir)
                 }
             }
 
@@ -216,6 +222,30 @@ class AITestActivity : AppCompatActivity() {
                     updateProcessingStatus("OpenAI failed: $error")
                     Toast.makeText(this@AITestActivity, "OpenAI failed: $error", Toast.LENGTH_SHORT).show()
                     Log.e(appTag, "OpenAI failed: $error")
+                }
+            }
+
+            override fun onTtsComplete(audioFile: File) {
+                runOnUiThread {
+                    updateProcessingStatus("Speech generated successfully")
+                    Log.i(appTag, "TTS complete: ${audioFile.absolutePath}")
+
+                    // Set audio file in custom scene helper
+                    customSceneHelper.setAudioFile(audioFile)
+
+                    // Get the text response from lastResultText or extract from processing
+                    lastResultText?.let { displayResultInCustomUI(it) }
+                }
+            }
+
+            override fun onTtsFailed(error: String) {
+                runOnUiThread {
+                    updateProcessingStatus("TTS failed: $error")
+                    Toast.makeText(this@AITestActivity, "Speech generation failed: $error", Toast.LENGTH_SHORT).show()
+                    Log.e(appTag, "TTS failed: $error")
+
+                    // Still display the text result even if TTS fails
+                    lastResultText?.let { displayResultInCustomUI(it) }
                 }
             }
         })

@@ -1,9 +1,11 @@
 package com.patrick.neuroglasses.helpers
 
+import android.media.MediaPlayer
 import android.util.Log
 import com.rokid.cxr.client.extend.CxrApi
 import com.rokid.cxr.client.extend.listeners.CustomViewListener
 import com.rokid.cxr.client.utils.ValueUtil
+import java.io.File
 
 /**
  * Custom Scene Helper
@@ -39,6 +41,8 @@ class CustomSceneHelper(private val appTag: String = "CustomSceneHelper") {
 
     private var listener: CustomSceneListener? = null
     private var isCustomViewListenerSet = false
+    private var mediaPlayer: MediaPlayer? = null
+    private var audioFileToPlay: File? = null
 
     /**
      * Set the listener for custom scene events
@@ -61,6 +65,9 @@ class CustomSceneHelper(private val appTag: String = "CustomSceneHelper") {
                 override fun onOpened() {
                     Log.d(appTag, "Custom view opened")
                     listener?.onSceneOpened()
+
+                    // Play audio if available
+                    audioFileToPlay?.let { playAudio(it) }
                 }
 
                 override fun onOpenFailed(errorCode: Int) {
@@ -81,6 +88,72 @@ class CustomSceneHelper(private val appTag: String = "CustomSceneHelper") {
             isCustomViewListenerSet = true
             Log.d(appTag, "Custom view listener initialized")
         }
+    }
+
+    /**
+     * Set the audio file to play when custom view opens
+     * @param audioFile The audio file to play
+     */
+    fun setAudioFile(audioFile: File) {
+        audioFileToPlay = audioFile
+        Log.d(appTag, "Audio file set: ${audioFile.absolutePath}")
+    }
+
+    /**
+     * Play audio file
+     * @param audioFile The audio file to play
+     */
+    private fun playAudio(audioFile: File) {
+        if (!audioFile.exists()) {
+            Log.e(appTag, "Audio file does not exist: ${audioFile.path}")
+            return
+        }
+
+        try {
+            // Stop any currently playing audio
+            stopAudio()
+
+            // Create and configure MediaPlayer
+            mediaPlayer = MediaPlayer().apply {
+                setDataSource(audioFile.absolutePath)
+                prepare()
+
+                // Set completion listener
+                setOnCompletionListener {
+                    Log.d(appTag, "Audio playback completed")
+                    stopAudio()
+                }
+
+                // Set error listener
+                setOnErrorListener { _, what, extra ->
+                    Log.e(appTag, "MediaPlayer error: what=$what, extra=$extra")
+                    stopAudio()
+                    true
+                }
+
+                // Start playback
+                start()
+            }
+
+            Log.i(appTag, "Started playing audio: ${audioFile.name}")
+        } catch (e: Exception) {
+            Log.e(appTag, "Error playing audio file: ${e.message}", e)
+            stopAudio()
+        }
+    }
+
+    /**
+     * Stop audio playback
+     */
+    private fun stopAudio() {
+        mediaPlayer?.apply {
+            if (isPlaying) {
+                stop()
+                Log.d(appTag, "Audio playback stopped")
+            }
+            release()
+        }
+        mediaPlayer = null
     }
 
     /**
@@ -176,9 +249,11 @@ class CustomSceneHelper(private val appTag: String = "CustomSceneHelper") {
      * Release resources and remove listener
      */
     fun release() {
+        stopAudio()
         CxrApi.getInstance().setCustomViewListener(null)
         listener = null
         isCustomViewListenerSet = false
+        audioFileToPlay = null
         Log.d(appTag, "CustomSceneHelper released")
     }
 }
