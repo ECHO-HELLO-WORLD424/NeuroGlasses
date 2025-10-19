@@ -17,9 +17,10 @@ import androidx.appcompat.app.AppCompatActivity
 import com.patrick.neuroglasses.R
 import com.patrick.neuroglasses.helpers.AICameraHelper
 import com.patrick.neuroglasses.helpers.AudioHelper
+import com.patrick.neuroglasses.helpers.CustomSceneHelper
+import com.patrick.neuroglasses.helpers.OpenAIHelper
 import com.rokid.cxr.client.extend.CxrApi
 import com.rokid.cxr.client.extend.listeners.AiEventListener
-import com.rokid.cxr.client.extend.listeners.CustomViewListener
 import java.io.File
 
 /**
@@ -49,6 +50,8 @@ class AITestActivity : AppCompatActivity() {
     // Helpers
     private lateinit var aiCameraHelper: AICameraHelper
     private lateinit var audioHelper: AudioHelper
+    private lateinit var openAIHelper: OpenAIHelper
+    private lateinit var customSceneHelper: CustomSceneHelper
 
     // Data
     private val predefinedInstructions = mutableListOf<String>()
@@ -178,6 +181,75 @@ class AITestActivity : AppCompatActivity() {
 
         // Set audio stream listener
         audioHelper.setAudioStreamListener(true)
+
+        // Initialize OpenAI helper
+        openAIHelper = OpenAIHelper(appTag)
+        openAIHelper.setListener(object : OpenAIHelper.OpenAIListener {
+            override fun onAsrComplete(text: String) {
+                runOnUiThread {
+                    updateProcessingStatus("ASR result: $text")
+                    Log.i(appTag, "ASR completed: $text")
+                    // Call OpenAI with ASR text
+                    sendToOpenAI(text)
+                }
+            }
+
+            override fun onAsrFailed(error: String) {
+                runOnUiThread {
+                    updateProcessingStatus("ASR failed: $error")
+                    Toast.makeText(this@AITestActivity, "ASR failed: $error", Toast.LENGTH_SHORT).show()
+                    Log.e(appTag, "ASR failed: $error")
+                }
+            }
+
+            override fun onOpenAIResponse(response: String) {
+                runOnUiThread {
+                    updateProcessingStatus("AI response received")
+                    Log.i(appTag, "OpenAI response: $response")
+                    // Display result
+                    displayResultInCustomUI(response)
+                }
+            }
+
+            override fun onOpenAIFailed(error: String) {
+                runOnUiThread {
+                    updateProcessingStatus("OpenAI failed: $error")
+                    Toast.makeText(this@AITestActivity, "OpenAI failed: $error", Toast.LENGTH_SHORT).show()
+                    Log.e(appTag, "OpenAI failed: $error")
+                }
+            }
+        })
+
+        // Initialize Custom Scene helper
+        customSceneHelper = CustomSceneHelper(appTag)
+        customSceneHelper.setListener(object : CustomSceneHelper.CustomSceneListener {
+            override fun onSceneOpened() {
+                runOnUiThread {
+                    updateProcessingStatus("Result displayed on glasses")
+                    Toast.makeText(this@AITestActivity, "Result displayed on glasses", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onSceneOpenFailed(errorCode: Int) {
+                runOnUiThread {
+                    updateProcessingStatus("Failed to display on glasses: $errorCode")
+                    Toast.makeText(this@AITestActivity, "Failed to display on glasses: $errorCode", Toast.LENGTH_LONG).show()
+                }
+            }
+
+            override fun onSceneClosed() {
+                runOnUiThread {
+                    Log.d(appTag, "Custom scene closed")
+                }
+            }
+
+            override fun onSceneUpdated() {
+                runOnUiThread {
+                    Log.d(appTag, "Custom scene updated")
+                }
+            }
+        })
+        customSceneHelper.initializeCustomViewListener()
     }
 
     private fun setupInstructions() {
@@ -222,37 +294,6 @@ class AITestActivity : AppCompatActivity() {
                 displayResultInCustomUI(result)
             }
         }
-
-        // Set up custom view listener once
-        CxrApi.getInstance().setCustomViewListener(object : CustomViewListener {
-            override fun onIconsSent() {
-                Log.d(appTag, "Custom view icons sent")
-            }
-
-            override fun onOpened() {
-                Log.d(appTag, "Custom view opened")
-                runOnUiThread {
-                    updateProcessingStatus("Result displayed on glasses")
-                    Toast.makeText(this@AITestActivity, "Result displayed on glasses", Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            override fun onOpenFailed(errorCode: Int) {
-                Log.e(appTag, "Custom view open failed: $errorCode")
-                runOnUiThread {
-                    updateProcessingStatus("Failed to display on glasses: $errorCode")
-                    Toast.makeText(this@AITestActivity, "Failed to display on glasses: $errorCode", Toast.LENGTH_LONG).show()
-                }
-            }
-
-            override fun onUpdated() {
-                Log.d(appTag, "Custom view updated")
-            }
-
-            override fun onClosed() {
-                Log.d(appTag, "Custom view closed")
-            }
-        })
 
         // AI event listener
         CxrApi.getInstance().setAiEventListener(object : AiEventListener {
@@ -346,12 +387,8 @@ class AITestActivity : AppCompatActivity() {
             return
         }
 
-        // Call ASR API (placeholder)
-        val asrText = callAsrAPI(recordedAudioFile!!)
-        updateProcessingStatus("ASR result: $asrText")
-
-        // Call OpenAI API with ASR text and image
-        callOpenAIAndDisplayResult(asrText)
+        // Call ASR API using helper
+        openAIHelper.callAsrAPI(recordedAudioFile!!)
     }
 
     /**
@@ -369,7 +406,7 @@ class AITestActivity : AppCompatActivity() {
             .setItems(predefinedInstructions.toTypedArray()) { _, which ->
                 val selectedInstruction = predefinedInstructions[which]
                 updateProcessingStatus("Instruction: $selectedInstruction")
-                callOpenAIAndDisplayResult(selectedInstruction)
+                sendToOpenAI(selectedInstruction)
             }
             .setNegativeButton("Cancel") { dialog, _ ->
                 dialog.dismiss()
@@ -380,40 +417,16 @@ class AITestActivity : AppCompatActivity() {
     }
 
     /**
-     * Call OpenAI API and display result
+     * Send request to OpenAI with instruction and optional image
      */
-    private fun callOpenAIAndDisplayResult(instruction: String) {
+    private fun sendToOpenAI(instruction: String) {
         updateProcessingStatus("Sending to AI...")
 
-        // Call OpenAI API (placeholder)
         val hasImage = capturedImage != null && includeImageCheckBox.isChecked
-        val result = callOpenAIAPI(instruction, if (hasImage) capturedImage else null)
+        val imageToSend = if (hasImage) capturedImage else null
 
-        updateProcessingStatus("AI response received")
-
-        // Display result in custom UI
-        displayResultInCustomUI(result)
-    }
-
-    /**
-     * Placeholder ASR API call
-     */
-    private fun callAsrAPI(audioFile: File): String {
-        // TODO: Implement actual ASR API call
-        Log.d(appTag, "ASR API placeholder called with file: ${audioFile.name}")
-        return "What do you see in this image?"
-    }
-
-    /**
-     * Placeholder OpenAI API call
-     */
-    private fun callOpenAIAPI(instruction: String, image: Bitmap?): String {
-        // TODO: Implement actual OpenAI API call
-        Log.d(appTag, "OpenAI API placeholder called")
-        Log.d(appTag, "Instruction: $instruction")
-        Log.d(appTag, "Has image: ${image != null}")
-
-        return "This is a dummy AI response to: \"$instruction\". ${if (image != null) "Image analysis would be included here." else ""}"
+        // Call OpenAI API using helper
+        openAIHelper.callOpenAI(instruction, imageToSend)
     }
 
     /**
@@ -428,46 +441,9 @@ class AITestActivity : AppCompatActivity() {
 
         updateProcessingStatus("Displaying result on glasses...")
 
-        // Escape quotes in the result text for JSON
-        val escapedText = resultText.replace("\"", "\\\"")
-
-        // Use correct JSON format based on documentation
-        val customViewData = """
-            {
-                "type": "LinearLayout",
-                "props": {
-                    "layout_width": "match_parent",
-                    "layout_height": "match_parent",
-                    "orientation": "vertical",
-                    "gravity": "center_horizontal",
-                    "paddingTop": "100dp",
-                    "paddingBottom": "100dp",
-                    "backgroundColor": "#FF000000"
-                },
-                "children": [
-                    {
-                        "type": "TextView",
-                        "props": {
-                            "id": "tv_result",
-                            "layout_width": "wrap_content",
-                            "layout_height": "wrap_content",
-                            "text": "$escapedText",
-                            "textSize": "16sp",
-                            "textColor": "#FF00FF00",
-                            "textStyle": "bold"
-                        }
-                    }
-                ]
-            }
-        """.trimIndent()
-
-        // Open custom UI with result
-        val status = CxrApi.getInstance().openCustomView(customViewData)
-        Log.d(appTag, "Open custom view status: $status")
-
-        runOnUiThread {
-            updateProcessingStatus("Sent to glasses (status: $status)")
-        }
+        // Use CustomSceneHelper to display
+        val status = customSceneHelper.displayTextResult(resultText)
+        Log.d(appTag, "Display status: $status")
     }
 
     /**
@@ -519,9 +495,10 @@ class AITestActivity : AppCompatActivity() {
         // Release resources
         aiCameraHelper.release()
         audioHelper.release()
+        openAIHelper.release()
+        customSceneHelper.release()
 
         // Remove listeners
         CxrApi.getInstance().setAiEventListener(null)
-        CxrApi.getInstance().setCustomViewListener(null)
     }
 }
