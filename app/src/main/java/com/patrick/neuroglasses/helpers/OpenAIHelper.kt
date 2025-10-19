@@ -56,6 +56,13 @@ data class MessageResponse(
 )
 
 /**
+ * Data class for ASR API response
+ */
+data class AsrResponse(
+    val text: String
+)
+
+/**
  * OpenAI Helper
  * Handles AI-related API calls including ASR (speech-to-text) and OpenAI chat completion
  */
@@ -67,7 +74,8 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
         .writeTimeout(15, TimeUnit.SECONDS)
         .build()
     private val gson = Gson()
-    private val apiUrl = "https://api.siliconflow.cn/v1/chat/completions"
+    private val chatApiUrl = "https://api.siliconflow.cn/v1/chat/completions"
+    private val asrApiUrl = "https://api.siliconflow.cn/v1/audio/transcriptions"
     private val apiKey = "sk-vfpzsggsnvzztaqlvznxhyfgrcccxwdecdbdulkuexvlzdld"
 
     /**
@@ -115,11 +123,70 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
     fun callAsrAPI(audioFile: File) {
         Log.d(appTag, "ASR API called with file: ${audioFile.name}")
 
-        // TODO: Implement actual ASR API call
-        // For now, return dummy text
-        val dummyText = "What do you see in this image?"
+        if (!audioFile.exists()) {
+            Log.e(appTag, "Audio file does not exist: ${audioFile.path}")
+            listener?.onAsrFailed("Audio file not found")
+            return
+        }
 
-        listener?.onAsrComplete(dummyText)
+        Thread {
+            try {
+                // Create multipart form data request
+                val requestBody = MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("model", "TeleAI/TeleSpeechASR")
+                    .addFormDataPart(
+                        "file",
+                        audioFile.name,
+                        RequestBody.create("audio/wav".toMediaType(), audioFile)
+                    )
+                    .build()
+
+                // Create HTTP request
+                val request = Request.Builder()
+                    .url(asrApiUrl)
+                    .addHeader("Authorization", "Bearer $apiKey")
+                    .post(requestBody)
+                    .build()
+
+                Log.d(appTag, "Sending ASR request for file: ${audioFile.name} (${audioFile.length()} bytes)")
+
+                // Execute the request
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        val errorBody = response.body?.string() ?: "Unknown error"
+                        Log.e(appTag, "ASR API call failed: ${response.code} - $errorBody")
+                        listener?.onAsrFailed("ASR API call failed: ${response.code}")
+                        return@Thread
+                    }
+
+                    val responseBody = response.body?.string()
+                    Log.d(appTag, "ASR Response: $responseBody")
+
+                    if (responseBody != null) {
+                        val asrResponse = gson.fromJson(responseBody, AsrResponse::class.java)
+                        val recognizedText = asrResponse.text
+
+                        if (recognizedText.isNotEmpty()) {
+                            Log.d(appTag, "ASR recognized text: $recognizedText")
+                            listener?.onAsrComplete(recognizedText)
+                        } else {
+                            Log.e(appTag, "ASR returned empty text")
+                            listener?.onAsrFailed("No text recognized")
+                        }
+                    } else {
+                        Log.e(appTag, "Empty ASR response body")
+                        listener?.onAsrFailed("Empty response")
+                    }
+                }
+            } catch (e: IOException) {
+                Log.e(appTag, "Network error during ASR: ${e.message}", e)
+                listener?.onAsrFailed("Network error: ${e.message}")
+            } catch (e: Exception) {
+                Log.e(appTag, "Error calling ASR API: ${e.message}", e)
+                listener?.onAsrFailed("Error: ${e.message}")
+            }
+        }.start()
     }
 
     /**
@@ -171,7 +238,7 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
                 // Create HTTP request
                 val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
                 val httpRequest = Request.Builder()
-                    .url(apiUrl)
+                    .url(chatApiUrl)
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Authorization", "Bearer $apiKey")
                     .post(requestBody)
