@@ -97,6 +97,32 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/apiTimeoutLabel" />
 
+        <!-- System Prompt Section -->
+        <TextView
+            android:id="@+id/systemPromptLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="System Prompt"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/apiTimeoutEditText" />
+
+        <EditText
+            android:id="@+id/systemPromptEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:hint="System prompt for AI assistant"
+            android:inputType="textMultiLine"
+            android:minLines="3"
+            android:gravity="top"
+            android:minHeight="48dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/systemPromptLabel" />
+
         <!-- VLM Model Section -->
         <TextView
             android:id="@+id/vlmModelLabel"
@@ -108,7 +134,7 @@
             android:layout_marginTop="16dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/apiTimeoutEditText" />
+            app:layout_constraintTop_toBottomOf="@+id/systemPromptEditText" />
 
         <EditText
             android:id="@+id/vlmModelEditText"

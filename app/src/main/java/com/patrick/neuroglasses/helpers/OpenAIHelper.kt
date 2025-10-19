@@ -86,6 +86,7 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
     private fun getApiBaseUrl(): String = SettingsActivity.getApiBaseUrl(context)
     private fun getApiToken(): String = SettingsActivity.getApiToken(context)
     private fun getApiTimeout(): Int = SettingsActivity.getApiTimeout(context)
+    private fun getSystemPrompt(): String = SettingsActivity.getSystemPrompt(context)
     private fun getVlmModel(): String = SettingsActivity.getVlmModel(context)
     private fun getVlmMaxTokens(): Int = SettingsActivity.getVlmMaxTokens(context)
     private fun getAsrModel(): String = SettingsActivity.getAsrModel(context)
@@ -259,15 +260,30 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
                     )
                 }
 
+                // Build the messages list with system prompt
+                val messagesList = mutableListOf<Message>()
+
+                // Add system message
+                val systemPrompt = getSystemPrompt()
+                messagesList.add(
+                    Message(
+                        role = "system",
+                        content = listOf(Content(type = "text", text = systemPrompt))
+                    )
+                )
+
+                // Add user message
+                messagesList.add(
+                    Message(
+                        role = "user",
+                        content = contentList
+                    )
+                )
+
                 // Create the request
                 val request = OpenAIRequest(
                     model = getVlmModel(),
-                    messages = listOf(
-                        Message(
-                            role = "user",
-                            content = contentList
-                        )
-                    ),
+                    messages = messagesList,
                     maxTokens = getVlmMaxTokens()
                 )
 

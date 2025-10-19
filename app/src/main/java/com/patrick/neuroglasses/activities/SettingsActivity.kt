@@ -15,6 +15,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var apiBaseUrlEditText: EditText
     private lateinit var apiTokenEditText: EditText
     private lateinit var apiTimeoutEditText: EditText
+    private lateinit var systemPromptEditText: EditText
     private lateinit var vlmModelEditText: EditText
     private lateinit var vlmMaxTokensEditText: EditText
     private lateinit var asrModelEditText: EditText
@@ -29,6 +30,7 @@ class SettingsActivity : AppCompatActivity() {
         const val KEY_API_BASE_URL = "api_base_url"
         const val KEY_API_TOKEN = "api_token"
         const val KEY_API_TIMEOUT = "api_timeout"
+        const val KEY_SYSTEM_PROMPT = "system_prompt"
         const val KEY_VLM_MODEL = "vlm_model"
         const val KEY_VLM_MAX_TOKENS = "vlm_max_tokens"
         const val KEY_ASR_MODEL = "asr_model"
@@ -39,6 +41,7 @@ class SettingsActivity : AppCompatActivity() {
         const val DEFAULT_API_BASE_URL = "https://api.siliconflow.cn/v1"
         const val DEFAULT_API_TOKEN = ""
         const val DEFAULT_API_TIMEOUT = 15
+        const val DEFAULT_SYSTEM_PROMPT = "You are a helpful AI assistance, trying to answer user's questions."
         const val DEFAULT_VLM_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
         const val DEFAULT_VLM_MAX_TOKENS = 1024
         const val DEFAULT_ASR_MODEL = "TeleAI/TeleSpeechASR"
@@ -59,6 +62,11 @@ class SettingsActivity : AppCompatActivity() {
         fun getApiTimeout(context: Context): Int {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             return prefs.getInt(KEY_API_TIMEOUT, DEFAULT_API_TIMEOUT)
+        }
+
+        fun getSystemPrompt(context: Context): String {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getString(KEY_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT) ?: DEFAULT_SYSTEM_PROMPT
         }
 
         fun getVlmModel(context: Context): String {
@@ -95,6 +103,7 @@ class SettingsActivity : AppCompatActivity() {
         apiBaseUrlEditText = findViewById(R.id.apiBaseUrlEditText)
         apiTokenEditText = findViewById(R.id.apiTokenEditText)
         apiTimeoutEditText = findViewById(R.id.apiTimeoutEditText)
+        systemPromptEditText = findViewById(R.id.systemPromptEditText)
         vlmModelEditText = findViewById(R.id.vlmModelEditText)
         vlmMaxTokensEditText = findViewById(R.id.vlmMaxTokensEditText)
         asrModelEditText = findViewById(R.id.asrModelEditText)
@@ -122,6 +131,7 @@ class SettingsActivity : AppCompatActivity() {
         apiBaseUrlEditText.setText(prefs.getString(KEY_API_BASE_URL, DEFAULT_API_BASE_URL))
         apiTokenEditText.setText(prefs.getString(KEY_API_TOKEN, DEFAULT_API_TOKEN))
         apiTimeoutEditText.setText(prefs.getInt(KEY_API_TIMEOUT, DEFAULT_API_TIMEOUT).toString())
+        systemPromptEditText.setText(prefs.getString(KEY_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT))
         vlmModelEditText.setText(prefs.getString(KEY_VLM_MODEL, DEFAULT_VLM_MODEL))
         vlmMaxTokensEditText.setText(prefs.getInt(KEY_VLM_MAX_TOKENS, DEFAULT_VLM_MAX_TOKENS).toString())
         asrModelEditText.setText(prefs.getString(KEY_ASR_MODEL, DEFAULT_ASR_MODEL))
@@ -154,6 +164,14 @@ class SettingsActivity : AppCompatActivity() {
                 return
             }
             editor.putInt(KEY_API_TIMEOUT, apiTimeout)
+
+            // Validate and save system prompt
+            val systemPrompt = systemPromptEditText.text.toString().trim()
+            if (systemPrompt.isEmpty()) {
+                Toast.makeText(this, "System Prompt cannot be empty", Toast.LENGTH_SHORT).show()
+                return
+            }
+            editor.putString(KEY_SYSTEM_PROMPT, systemPrompt)
 
             // Validate and save VLM model
             val vlmModel = vlmModelEditText.text.toString().trim()
@@ -210,6 +228,7 @@ class SettingsActivity : AppCompatActivity() {
         apiBaseUrlEditText.setText(DEFAULT_API_BASE_URL)
         apiTokenEditText.setText(DEFAULT_API_TOKEN)
         apiTimeoutEditText.setText(DEFAULT_API_TIMEOUT.toString())
+        systemPromptEditText.setText(DEFAULT_SYSTEM_PROMPT)
         vlmModelEditText.setText(DEFAULT_VLM_MODEL)
         vlmMaxTokensEditText.setText(DEFAULT_VLM_MAX_TOKENS.toString())
         asrModelEditText.setText(DEFAULT_ASR_MODEL)
