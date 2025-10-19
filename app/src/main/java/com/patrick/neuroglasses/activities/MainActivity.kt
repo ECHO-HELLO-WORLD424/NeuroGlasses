@@ -330,8 +330,64 @@ class MainActivity : AppCompatActivity() {
             bluetoothHelper.release()
             CxrApi.getInstance().deinitBluetooth()
             Log.d(appTag, "Activity finishing - Bluetooth disconnected")
+
+            // Clean up temporary audio files
+            cleanupTempAudioFiles()
         } else {
             Log.d(appTag, "Activity being recreated - keeping Bluetooth connection")
         }
+    }
+
+    /**
+     * Clean up temporary audio files in audio_recordings and tts_audio directories
+     */
+    private fun cleanupTempAudioFiles() {
+        try {
+            // Clean up audio recordings directory
+            val audioRecordingsDir = getExternalFilesDir("audio_recordings")
+            if (audioRecordingsDir != null && audioRecordingsDir.exists()) {
+                val deletedCount = deleteDirectoryContents(audioRecordingsDir)
+                Log.d(appTag, "Cleaned up audio_recordings: deleted $deletedCount files")
+            }
+
+            // Clean up TTS audio directory
+            val ttsAudioDir = getExternalFilesDir("tts_audio")
+            if (ttsAudioDir != null && ttsAudioDir.exists()) {
+                val deletedCount = deleteDirectoryContents(ttsAudioDir)
+                Log.d(appTag, "Cleaned up tts_audio: deleted $deletedCount files")
+            }
+        } catch (e: Exception) {
+            Log.e(appTag, "Error cleaning up temporary audio files: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Delete all files in a directory (but keep the directory itself)
+     * @param directory The directory to clean
+     * @return Number of files deleted
+     */
+    private fun deleteDirectoryContents(directory: java.io.File): Int {
+        var deletedCount = 0
+        try {
+            directory.listFiles()?.forEach { file ->
+                if (file.isFile) {
+                    if (file.delete()) {
+                        deletedCount++
+                        Log.d(appTag, "Deleted file: ${file.name}")
+                    } else {
+                        Log.w(appTag, "Failed to delete file: ${file.name}")
+                    }
+                } else if (file.isDirectory) {
+                    // Recursively delete subdirectories
+                    deletedCount += deleteDirectoryContents(file)
+                    if (file.delete()) {
+                        Log.d(appTag, "Deleted directory: ${file.name}")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(appTag, "Error deleting directory contents: ${e.message}", e)
+        }
+        return deletedCount
     }
 }
