@@ -1,10 +1,12 @@
 package com.patrick.neuroglasses.helpers
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.util.Base64
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
+import com.patrick.neuroglasses.activities.SettingsActivity
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -76,18 +78,33 @@ data class TtsRequest(
  * OpenAI Helper
  * Handles AI-related API calls including ASR (speech-to-text) and OpenAI chat completion
  */
-class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
+class OpenAIHelper(private val context: Context, private val appTag: String = "OpenAIHelper") {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .build()
     private val gson = Gson()
-    private val chatApiUrl = "https://api.siliconflow.cn/v1/chat/completions"
-    private val asrApiUrl = "https://api.siliconflow.cn/v1/audio/transcriptions"
-    private val ttsApiUrl = "https://api.siliconflow.cn/v1/audio/speech"
-    private val apiKey = "sk-vfpzsggsnvzztaqlvznxhyfgrcccxwdecdbdulkuexvlzdld"
+
+    // Get configuration from SharedPreferences
+    private fun getApiBaseUrl(): String = SettingsActivity.getApiBaseUrl(context)
+    private fun getApiToken(): String = SettingsActivity.getApiToken(context)
+    private fun getApiTimeout(): Int = SettingsActivity.getApiTimeout(context)
+    private fun getVlmModel(): String = SettingsActivity.getVlmModel(context)
+    private fun getVlmMaxTokens(): Int = SettingsActivity.getVlmMaxTokens(context)
+    private fun getAsrModel(): String = SettingsActivity.getAsrModel(context)
+    private fun getTtsModel(): String = SettingsActivity.getTtsModel(context)
+    private fun getTtsVoice(): String = SettingsActivity.getTtsVoice(context)
+
+    // Build OkHttpClient with configurable timeout
+    private fun getClient(): OkHttpClient {
+        val timeoutSeconds = getApiTimeout().toLong()
+        return OkHttpClient.Builder()
+            .connectTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            .build()
+    }
+
+    private fun getChatApiUrl(): String = "${getApiBaseUrl()}/chat/completions"
+    private fun getAsrApiUrl(): String = "${getApiBaseUrl()}/audio/transcriptions"
+    private fun getTtsApiUrl(): String = "${getApiBaseUrl()}/audio/speech"
 
     /**
      * Listener interface for AI API callbacks
@@ -157,7 +174,7 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
                 // Create multipart form data request
                 val requestBody = MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
-                    .addFormDataPart("model", "TeleAI/TeleSpeechASR")
+                    .addFormDataPart("model", getAsrModel())
                     .addFormDataPart(
                         "file",
                         audioFile.name,
@@ -167,15 +184,15 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
 
                 // Create HTTP request
                 val request = Request.Builder()
-                    .url(asrApiUrl)
-                    .addHeader("Authorization", "Bearer $apiKey")
+                    .url(getAsrApiUrl())
+                    .addHeader("Authorization", "Bearer ${getApiToken()}")
                     .post(requestBody)
                     .build()
 
                 Log.d(appTag, "Sending ASR request for file: ${audioFile.name} (${audioFile.length()} bytes)")
 
                 // Execute the request
-                client.newCall(request).execute().use { response ->
+                getClient().newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
                         val errorBody = response.body?.string() ?: "Unknown error"
                         Log.e(appTag, "ASR API call failed: ${response.code} - $errorBody")
@@ -244,14 +261,14 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
 
                 // Create the request
                 val request = OpenAIRequest(
-                    model = "Qwen/Qwen3-VL-30B-A3B-Instruct",
+                    model = getVlmModel(),
                     messages = listOf(
                         Message(
                             role = "user",
                             content = contentList
                         )
                     ),
-                    maxTokens = 1024
+                    maxTokens = getVlmMaxTokens()
                 )
 
                 // Convert request to JSON
@@ -261,14 +278,14 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
                 // Create HTTP request
                 val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
                 val httpRequest = Request.Builder()
-                    .url(chatApiUrl)
+                    .url(getChatApiUrl())
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", "Bearer $apiKey")
+                    .addHeader("Authorization", "Bearer ${getApiToken()}")
                     .post(requestBody)
                     .build()
 
                 // Execute the request
-                client.newCall(httpRequest).execute().use { response ->
+                getClient().newCall(httpRequest).execute().use { response ->
                     if (!response.isSuccessful) {
                         val errorBody = response.body?.string() ?: "Unknown error"
                         Log.e(appTag, "API call failed: ${response.code} - $errorBody")
@@ -333,9 +350,9 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
             try {
                 // Create the TTS request
                 val request = TtsRequest(
-                    model = "IndexTeam/IndexTTS-2",
+                    model = getTtsModel(),
                     input = text,
-                    voice = "speech:neuro-glasses:d1jud8rk20jc738kdhng:cjnfwzkhoeaxofdnrvrz"
+                    voice = getTtsVoice()
                 )
 
                 // Convert request to JSON
@@ -345,14 +362,14 @@ class OpenAIHelper(private val appTag: String = "OpenAIHelper") {
                 // Create HTTP request
                 val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
                 val httpRequest = Request.Builder()
-                    .url(ttsApiUrl)
+                    .url(getTtsApiUrl())
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", "Bearer $apiKey")
+                    .addHeader("Authorization", "Bearer ${getApiToken()}")
                     .post(requestBody)
                     .build()
 
                 // Execute the request
-                client.newCall(httpRequest).execute().use { response ->
+                getClient().newCall(httpRequest).execute().use { response ->
                     if (!response.isSuccessful) {
                         val errorBody = response.body?.string() ?: "Unknown error"
                         Log.e(appTag, "TTS API call failed: ${response.code} - $errorBody")

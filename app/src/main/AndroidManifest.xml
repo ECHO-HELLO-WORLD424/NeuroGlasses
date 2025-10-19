@@ -67,7 +67,7 @@
             android:name=".activities.AITestActivity"
             android:exported="false" />
         <activity
-            android:name=".activities.UITestActivity"
+            android:name=".activities.SettingsActivity"
             android:exported="false" />
     </application>
 

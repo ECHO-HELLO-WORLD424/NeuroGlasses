@@ -183,7 +183,7 @@ class AITestActivity : AppCompatActivity() {
         audioHelper.setAudioStreamListener(true)
 
         // Initialize OpenAI helper
-        openAIHelper = OpenAIHelper(appTag)
+        openAIHelper = OpenAIHelper(this, appTag)
         openAIHelper.setListener(object : OpenAIHelper.OpenAIListener {
             override fun onAsrComplete(text: String) {
                 runOnUiThread {

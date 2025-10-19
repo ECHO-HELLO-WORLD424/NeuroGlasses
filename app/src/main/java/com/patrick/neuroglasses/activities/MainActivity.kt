@@ -94,9 +94,9 @@ class MainActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-        // Setup test UI button
+        // Setup settings button
         testUIButton.setOnClickListener {
-            val intent = Intent(this, UITestActivity::class.java)
+            val intent = Intent(this, SettingsActivity::class.java)
             startActivity(intent)
         }
 

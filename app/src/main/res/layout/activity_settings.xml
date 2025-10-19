@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/main"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        tools:context=".activities.SettingsActivity">
+
+        <TextView
+            android:id="@+id/titleTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="API Configuration"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            android:layout_marginTop="16dp" />
+
+        <!-- API Base URL Section -->
+        <TextView
+            android:id="@+id/apiBaseUrlLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="API Base URL"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="24dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/titleTextView" />
+
+        <EditText
+            android:id="@+id/apiBaseUrlEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:hint="https://api.example.com/v1"
+            android:inputType="textUri"
+            android:minHeight="48dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/apiBaseUrlLabel" />
+
+        <!-- API Token Section -->
+        <TextView
+            android:id="@+id/apiTokenLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="API Token"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/apiBaseUrlEditText" />
+
+        <EditText
+            android:id="@+id/apiTokenEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:hint="Enter your API token"
+            android:inputType="textPassword"
+            android:minHeight="48dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/apiTokenLabel" />
+
+        <!-- API Timeout Section -->
+        <TextView
+            android:id="@+id/apiTimeoutLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="API Timeout (seconds)"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/apiTokenEditText" />
+
+        <EditText
+            android:id="@+id/apiTimeoutEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:hint="15"
+            android:inputType="number"
+            android:minHeight="48dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/apiTimeoutLabel" />
+
+        <!-- VLM Model Section -->
+        <TextView
+            android:id="@+id/vlmModelLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="VLM Model"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/apiTimeoutEditText" />
+
+        <EditText
+            android:id="@+id/vlmModelEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:hint="Model name for vision language"
+            android:inputType="text"
+            android:minHeight="48dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/vlmModelLabel" />
+
+        <!-- VLM Max Tokens Section -->
+        <TextView
+            android:id="@+id/vlmMaxTokensLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="VLM Max Tokens"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/vlmModelEditText" />
+
+        <EditText
+            android:id="@+id/vlmMaxTokensEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:hint="1024"
+            android:inputType="number"
+            android:minHeight="48dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/vlmMaxTokensLabel" />
+
+        <!-- ASR Model Section -->
+        <TextView
+            android:id="@+id/asrModelLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="ASR Model"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/vlmMaxTokensEditText" />
+
+        <EditText
+            android:id="@+id/asrModelEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:hint="Model name for speech recognition"
+            android:inputType="text"
+            android:minHeight="48dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/asrModelLabel" />
+
+        <!-- TTS Model Section -->
+        <TextView
+            android:id="@+id/ttsModelLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="TTS Model"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/asrModelEditText" />
+
+        <EditText
+            android:id="@+id/ttsModelEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:hint="Model name for text-to-speech"
+            android:inputType="text"
+            android:minHeight="48dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/ttsModelLabel" />
+
+        <!-- TTS Voice Section -->
+        <TextView
+            android:id="@+id/ttsVoiceLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="TTS Voice"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/ttsModelEditText" />
+
+        <EditText
+            android:id="@+id/ttsVoiceEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:hint="Voice ID for TTS"
+            android:inputType="text"
+            android:minHeight="48dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/ttsVoiceLabel" />
+
+        <!-- Buttons -->
+        <Button
+            android:id="@+id/saveButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Save Settings"
+            android:textSize="16sp"
+            android:layout_marginTop="24dp"
+            android:layout_marginEnd="8dp"
+            app:layout_constraintEnd_toStartOf="@+id/resetButton"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/ttsVoiceEditText" />
+
+        <Button
+            android:id="@+id/resetButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Reset to Defaults"
+            android:textSize="16sp"
+            android:layout_marginTop="24dp"
+            android:layout_marginStart="8dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/saveButton"
+            app:layout_constraintTop_toBottomOf="@+id/ttsVoiceEditText" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>
