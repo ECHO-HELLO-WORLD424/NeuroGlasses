@@ -87,6 +87,32 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/useAsrCheckBox" />
 
+        <!-- Use TTS Toggle -->
+        <CheckBox
+            android:id="@+id/useTtsCheckBox"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Use Text-to-Speech (TTS)"
+            android:checked="true"
+            android:textSize="16sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/asrHintText" />
+
+        <TextView
+            android:id="@+id/ttsHintText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="32dp"
+            android:layout_marginTop="4dp"
+            android:text="If unchecked, only text will be displayed without audio"
+            android:textSize="12sp"
+            android:textColor="@android:color/darker_gray"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/useTtsCheckBox" />
+
         <!-- Predefined Instructions Section -->
         <TextView
             android:id="@+id/instructionsSectionTitle"
@@ -97,7 +123,7 @@
             android:textSize="18sp"
             android:textStyle="bold"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/asrHintText" />
+            app:layout_constraintTop_toBottomOf="@+id/ttsHintText" />
 
         <TextView
             android:id="@+id/instructionsHint"

@@ -29,6 +29,7 @@ import java.io.File
  * This activity allows users to:
  * - Configure whether to include images in AI chat
  * - Configure whether to use ASR (voice) or predefined instructions
+ * - Configure whether to use Text-to-Speech (TTS) for responses
  * - Manage predefined instructions
  * - Process AI requests when the AI key is pressed on glasses
  */
@@ -40,6 +41,7 @@ class AITestActivity : AppCompatActivity() {
     private lateinit var statusTextView: TextView
     private lateinit var includeImageCheckBox: CheckBox
     private lateinit var useAsrCheckBox: CheckBox
+    private lateinit var useTtsCheckBox: CheckBox
     private lateinit var newInstructionEditText: EditText
     private lateinit var addInstructionButton: Button
     private lateinit var instructionsListView: ListView
@@ -87,6 +89,7 @@ class AITestActivity : AppCompatActivity() {
         statusTextView = findViewById(R.id.statusTextView)
         includeImageCheckBox = findViewById(R.id.includeImageCheckBox)
         useAsrCheckBox = findViewById(R.id.useAsrCheckBox)
+        useTtsCheckBox = findViewById(R.id.useTtsCheckBox)
         newInstructionEditText = findViewById(R.id.newInstructionEditText)
         addInstructionButton = findViewById(R.id.addInstructionButton)
         instructionsListView = findViewById(R.id.instructionsListView)
@@ -210,10 +213,18 @@ class AITestActivity : AppCompatActivity() {
                     // Store the response
                     lastResultText = response
 
-                    // Convert response to speech
-                    updateProcessingStatus("Converting to speech...")
-                    val audioDir = getExternalFilesDir("tts_audio") ?: filesDir
-                    openAIHelper.callTtsAPI(response, audioDir)
+                    // Check if TTS is enabled
+                    if (useTtsCheckBox.isChecked) {
+                        // Convert response to speech
+                        updateProcessingStatus("Converting to speech...")
+                        val audioDir = getExternalFilesDir("tts_audio") ?: filesDir
+                        openAIHelper.callTtsAPI(response, audioDir)
+                    } else {
+                        // Skip TTS, just display the text
+                        updateProcessingStatus("Displaying text (TTS disabled)")
+                        Log.i(appTag, "TTS disabled, displaying text only")
+                        displayResultInCustomUI(response)
+                    }
                 }
             }
 
