@@ -1,497 +1,527 @@
 package com.patrick.neuroglasses.activities
 
 import android.graphics.Bitmap
-import android.media.MediaPlayer
 import android.os.Bundle
 import android.util.Log
+import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
+import android.widget.EditText
 import android.widget.ImageView
+import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
-import java.io.File
-import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import com.patrick.neuroglasses.R
 import com.patrick.neuroglasses.helpers.AICameraHelper
 import com.patrick.neuroglasses.helpers.AudioHelper
 import com.rokid.cxr.client.extend.CxrApi
 import com.rokid.cxr.client.extend.listeners.AiEventListener
-import com.rokid.cxr.client.utils.ValueUtil
-import java.util.Locale
+import com.rokid.cxr.client.extend.listeners.CustomViewListener
+import java.io.File
 
+/**
+ * AI Chat Configuration Activity
+ *
+ * This activity allows users to:
+ * - Configure whether to include images in AI chat
+ * - Configure whether to use ASR (voice) or predefined instructions
+ * - Manage predefined instructions
+ * - Process AI requests when the AI key is pressed on glasses
+ */
 class AITestActivity : AppCompatActivity() {
     private val appTag = "AITestActivity"
 
+    // UI Components
     private lateinit var titleTextView: TextView
-    private lateinit var toggleAiSceneButton: Button
-    private lateinit var aiSceneStatusTextView: TextView
-    private lateinit var takePhotoButton: Button
-    private lateinit var photoStatusTextView: TextView
-    private lateinit var photoImageView: ImageView
-    private lateinit var toggleAudioButton: Button
-    private lateinit var audioStatusTextView: TextView
-    private lateinit var playAudioButton: Button
+    private lateinit var statusTextView: TextView
+    private lateinit var includeImageCheckBox: CheckBox
+    private lateinit var useAsrCheckBox: CheckBox
+    private lateinit var newInstructionEditText: EditText
+    private lateinit var addInstructionButton: Button
+    private lateinit var instructionsListView: ListView
+    private lateinit var processingStatusTextView: TextView
+    private lateinit var capturedImageView: ImageView
+    private lateinit var showResultButton: Button
 
-    private var isAiSceneOpen = false
-
-    // Helper classes
+    // Helpers
     private lateinit var aiCameraHelper: AICameraHelper
     private lateinit var audioHelper: AudioHelper
 
-    // Media player for audio playback
-    private var mediaPlayer: MediaPlayer? = null
+    // Data
+    private val predefinedInstructions = mutableListOf<String>()
+    private lateinit var instructionsAdapter: ArrayAdapter<String>
 
-    // AI Camera listener implementation
-    private val aiCameraListener = object : AICameraHelper.AICameraListener {
-        override fun onCameraOpened(message: String) {
-            runOnUiThread {
-                updatePhotoStatus(message)
-                Toast.makeText(this@AITestActivity, "Camera opened successfully", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        override fun onCameraOpenFailed(message: String) {
-            runOnUiThread {
-                updatePhotoStatus(message)
-                Toast.makeText(this@AITestActivity, "Failed to open camera", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        override fun onPhotoStatusUpdate(message: String) {
-            runOnUiThread {
-                updatePhotoStatus(message)
-            }
-        }
-
-        override fun onPhotoSuccess(bitmap: Bitmap, dataSize: Int, width: Int, height: Int) {
-            runOnUiThread {
-                photoImageView.setImageBitmap(bitmap)
-                updatePhotoStatus("Photo displayed: $dataSize bytes, ${width}x${height}")
-                Toast.makeText(
-                    this@AITestActivity,
-                    "Photo captured and displayed! ${width}x${height}",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
-
-        override fun onPhotoFailed(message: String) {
-            runOnUiThread {
-                updatePhotoStatus(message)
-                Toast.makeText(this@AITestActivity, message, Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    // Audio recording listener implementation
-    private val audioRecordingListener = object : AudioHelper.AudioRecordingListener {
-        override fun onAudioStreamStarted(codecType: Int, streamType: String?) {
-            runOnUiThread {
-                Toast.makeText(
-                    this@AITestActivity,
-                    "Audio stream started: ${if (codecType == 1) "PCM" else "OPUS"}",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-
-        override fun onAudioDataReceived(chunkSize: Int, totalChunks: Int, totalBytes: Long) {
-            runOnUiThread {
-                val sizeKB = totalBytes / 1024.0
-                updateAudioStatus("Recording: ${String.format(Locale.US, "%.2f", sizeKB)} KB ($totalChunks chunks)")
-            }
-        }
-
-        override fun onAudioRecordingStarted(message: String) {
-            runOnUiThread {
-                updateAudioStatus(message)
-                updateAudioButtonText()
-                Toast.makeText(this@AITestActivity, "Audio recording started", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        override fun onAudioRecordingFailed(message: String) {
-            runOnUiThread {
-                updateAudioStatus(message)
-                Toast.makeText(this@AITestActivity, message, Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        override fun onAudioRecordingStopped(savedFilePath: String?) {
-            runOnUiThread {
-                if (savedFilePath != null) {
-                    val fileName = File(savedFilePath).name
-                    updateAudioStatus("Saved: $fileName")
-                    Toast.makeText(
-                        this@AITestActivity,
-                        "Audio saved to:\n$fileName",
-                        Toast.LENGTH_LONG
-                    ).show()
-                } else {
-                    val stats = audioHelper.getRecordingStats()
-                    if (stats.totalChunks == 0) {
-                        updateAudioStatus("Recording stopped (no data)")
-                        Toast.makeText(this@AITestActivity, "No audio data recorded", Toast.LENGTH_SHORT).show()
-                    } else {
-                        updateAudioStatus("Recording stopped (save failed)")
-                        Toast.makeText(this@AITestActivity, "Failed to save audio file", Toast.LENGTH_SHORT).show()
-                    }
-                }
-                updateAudioButtonText()
-            }
-        }
-
-        override fun onAudioStatusUpdate(message: String) {
-            runOnUiThread {
-                updateAudioStatus(message)
-            }
-        }
-    }
-
-    // AI event listener to receive events from glasses
-    private val aiEventListener = object : AiEventListener {
-        /**
-         * When the AI key is long pressed on the glasses
-         */
-        override fun onAiKeyDown() {
-            runOnUiThread {
-                Log.d(appTag, "AI key pressed down - AI scene opening")
-                isAiSceneOpen = true
-                updateButtonText()
-                updateStatus("AI key pressed - scene opening")
-
-                // Auto-start audio recording when AI scene opens
-                startAudioRecording()
-            }
-        }
-
-        /**
-         * When the AI key is released (currently has no effect)
-         */
-        override fun onAiKeyUp() {
-            runOnUiThread {
-                Log.d(appTag, "AI key released")
-                updateStatus("AI key released")
-            }
-        }
-
-        /**
-         * When the AI Scene exits (from glasses side)
-         */
-        override fun onAiExit() {
-            runOnUiThread {
-                Log.d(appTag, "AI scene exited from glasses")
-                isAiSceneOpen = false
-                updateButtonText()
-                updateStatus("AI scene exited from glasses")
-                Toast.makeText(this@AITestActivity, "AI scene closed by glasses", Toast.LENGTH_SHORT).show()
-
-                // Auto-stop recording, save file, and clear cache when AI scene exits
-                stopAndSaveAudioRecording()
-            }
-        }
-    }
+    // State
+    private var isAiSceneOpen = false
+    private var capturedImage: Bitmap? = null
+    private var recordedAudioFile: File? = null
+    private var lastResultText: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContentView(R.layout.activity_second)
 
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.second_main)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
-
         // Initialize UI components
+        initializeViews()
+
+        // Initialize helpers
+        initializeHelpers()
+
+        // Setup predefined instructions
+        setupInstructions()
+
+        // Setup listeners
+        setupListeners()
+
+        updateStatus("Ready. Press AI key on glasses to start.")
+    }
+
+    private fun initializeViews() {
         titleTextView = findViewById(R.id.secondTitleTextView)
-        toggleAiSceneButton = findViewById(R.id.toggleAiSceneButton)
-        aiSceneStatusTextView = findViewById(R.id.aiSceneStatusTextView)
-        takePhotoButton = findViewById(R.id.takePhotoButton)
-        photoStatusTextView = findViewById(R.id.photoStatusTextView)
-        photoImageView = findViewById(R.id.photoImageView)
-        toggleAudioButton = findViewById(R.id.toggleAudioButton)
-        audioStatusTextView = findViewById(R.id.audioStatusTextView)
-        playAudioButton = findViewById(R.id.playAudioButton)
+        statusTextView = findViewById(R.id.statusTextView)
+        includeImageCheckBox = findViewById(R.id.includeImageCheckBox)
+        useAsrCheckBox = findViewById(R.id.useAsrCheckBox)
+        newInstructionEditText = findViewById(R.id.newInstructionEditText)
+        addInstructionButton = findViewById(R.id.addInstructionButton)
+        instructionsListView = findViewById(R.id.instructionsListView)
+        processingStatusTextView = findViewById(R.id.processingStatusTextView)
+        capturedImageView = findViewById(R.id.capturedImageView)
+        showResultButton = findViewById(R.id.showResultButton)
+    }
 
-        // Initialize helper classes
+    private fun initializeHelpers() {
+        // Initialize AI camera helper
         aiCameraHelper = AICameraHelper(appTag)
-        aiCameraHelper.setListener(aiCameraListener)
+        aiCameraHelper.setListener(object : AICameraHelper.AICameraListener {
+            override fun onCameraOpened(message: String) {
+                Log.d(appTag, "Camera opened: $message")
+            }
 
+            override fun onCameraOpenFailed(message: String) {
+                Log.e(appTag, "Camera open failed: $message")
+            }
+
+            override fun onPhotoStatusUpdate(message: String) {
+                Log.d(appTag, "Photo status: $message")
+            }
+
+            override fun onPhotoSuccess(bitmap: Bitmap, dataSize: Int, width: Int, height: Int) {
+                runOnUiThread {
+                    capturedImage = bitmap
+                    showProcessingUI(true)
+                    capturedImageView.setImageBitmap(bitmap)
+                    capturedImageView.visibility = View.VISIBLE
+                    updateProcessingStatus("Image captured: ${width}x${height}")
+                    Log.i(appTag, "Photo captured successfully: ${width}x${height}, ${dataSize} bytes")
+                }
+            }
+
+            override fun onPhotoFailed(message: String) {
+                runOnUiThread {
+                    updateProcessingStatus("Image capture failed: $message")
+                    Toast.makeText(this@AITestActivity, "Failed to capture image", Toast.LENGTH_SHORT).show()
+                    Log.e(appTag, "Photo capture failed: $message")
+                }
+            }
+        })
+
+        // Initialize audio helper
         audioHelper = AudioHelper(this, appTag)
-        audioHelper.setListener(audioRecordingListener)
+        audioHelper.setListener(object : AudioHelper.AudioRecordingListener {
+            override fun onAudioStreamStarted(codecType: Int, streamType: String?) {
+                Log.d(appTag, "Audio stream started: codec=$codecType, stream=$streamType")
+            }
 
-        // Set AI event listener
-        setAiEventListener(true)
+            override fun onAudioDataReceived(chunkSize: Int, totalChunks: Int, totalBytes: Long) {
+                runOnUiThread {
+                    updateProcessingStatus("Recording audio: ${totalBytes / 1024} KB")
+                }
+            }
 
-        // Set audio stream listener to receive audio from glasses.
-        // Recording will start/stop automatically based on AI scene state
+            override fun onAudioRecordingStarted(message: String) {
+                Log.i(appTag, "Audio recording started: $message")
+            }
+
+            override fun onAudioRecordingFailed(message: String) {
+                runOnUiThread {
+                    updateProcessingStatus("Audio recording failed: $message")
+                    Toast.makeText(this@AITestActivity, "Audio recording failed", Toast.LENGTH_SHORT).show()
+                    Log.e(appTag, "Audio recording failed: $message")
+                }
+            }
+
+            override fun onAudioRecordingStopped(savedFilePath: String?) {
+                runOnUiThread {
+                    if (savedFilePath != null) {
+                        recordedAudioFile = File(savedFilePath)
+                        updateProcessingStatus("Audio saved: ${recordedAudioFile?.name}")
+                        Log.i(appTag, "Audio recording saved: $savedFilePath")
+
+                        // Process the request now that audio is ready
+                        processAiRequest()
+                    } else {
+                        updateProcessingStatus("No audio recorded")
+                        Log.w(appTag, "No audio data recorded")
+                        // Still process request even without audio
+                        processAiRequest()
+                    }
+                }
+            }
+
+            override fun onAudioStatusUpdate(message: String) {
+                Log.d(appTag, "Audio status: $message")
+            }
+        })
+
+        // Set audio stream listener
         audioHelper.setAudioStreamListener(true)
+    }
 
-        // Setup button click listeners
-        toggleAiSceneButton.setOnClickListener {
-            toggleAiScene()
+    private fun setupInstructions() {
+        // Add some default instructions
+        predefinedInstructions.add("What do you see in this image?")
+        predefinedInstructions.add("Describe the scene")
+        predefinedInstructions.add("Identify objects in the image")
+        predefinedInstructions.add("Translate the text in this image")
+
+        // Setup adapter
+        instructionsAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_list_item_1,
+            predefinedInstructions
+        )
+        instructionsListView.adapter = instructionsAdapter
+
+        // Handle instruction clicks (delete on long click)
+        instructionsListView.setOnItemLongClickListener { _, _, position, _ ->
+            showDeleteInstructionDialog(position)
+            true
+        }
+    }
+
+    private fun setupListeners() {
+        // Add instruction button
+        addInstructionButton.setOnClickListener {
+            val newInstruction = newInstructionEditText.text.toString().trim()
+            if (newInstruction.isNotEmpty()) {
+                predefinedInstructions.add(newInstruction)
+                instructionsAdapter.notifyDataSetChanged()
+                newInstructionEditText.text.clear()
+                Toast.makeText(this, "Instruction added", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Please enter an instruction", Toast.LENGTH_SHORT).show()
+            }
         }
 
-        takePhotoButton.setOnClickListener {
-            takePhoto()
+        // Show result button
+        showResultButton.setOnClickListener {
+            lastResultText?.let { result ->
+                displayResultInCustomUI(result)
+            }
         }
 
-        toggleAudioButton.setOnClickListener {
-            toggleAudioRecording()
-        }
+        // Set up custom view listener once
+        CxrApi.getInstance().setCustomViewListener(object : CustomViewListener {
+            override fun onIconsSent() {
+                Log.d(appTag, "Custom view icons sent")
+            }
 
-        playAudioButton.setOnClickListener {
-            playLastRecording()
-        }
+            override fun onOpened() {
+                Log.d(appTag, "Custom view opened")
+                runOnUiThread {
+                    updateProcessingStatus("Result displayed on glasses")
+                    Toast.makeText(this@AITestActivity, "Result displayed on glasses", Toast.LENGTH_SHORT).show()
+                }
+            }
 
-        updateStatus("Ready to open AI scene")
-        updatePhotoStatus("Ready to take photos")
-        updateAudioStatus("Ready - recording starts with AI scene")
-        updateAudioButtonText()
+            override fun onOpenFailed(errorCode: Int) {
+                Log.e(appTag, "Custom view open failed: $errorCode")
+                runOnUiThread {
+                    updateProcessingStatus("Failed to display on glasses: $errorCode")
+                    Toast.makeText(this@AITestActivity, "Failed to display on glasses: $errorCode", Toast.LENGTH_LONG).show()
+                }
+            }
+
+            override fun onUpdated() {
+                Log.d(appTag, "Custom view updated")
+            }
+
+            override fun onClosed() {
+                Log.d(appTag, "Custom view closed")
+            }
+        })
+
+        // AI event listener
+        CxrApi.getInstance().setAiEventListener(object : AiEventListener {
+            override fun onAiKeyDown() {
+                runOnUiThread {
+                    Log.d(appTag, "AI key pressed - starting request")
+                    isAiSceneOpen = true
+                    onAiKeyPressed()
+                }
+            }
+
+            override fun onAiKeyUp() {
+                // Not used
+            }
+
+            override fun onAiExit() {
+                runOnUiThread {
+                    Log.d(appTag, "AI scene exited")
+                    isAiSceneOpen = false
+                    // Stop audio recording if active
+                    if (audioHelper.isRecording) {
+                        audioHelper.closeAudioRecord("AI_assistant")
+                    }
+                }
+            }
+        })
     }
 
     /**
-     * Set or remove the AI event listener
-     * @param set true: set the listener, false: remove the listener
+     * Called when AI key is pressed on glasses
+     * This starts the AI request process
      */
-    private fun setAiEventListener(set: Boolean) {
-        CxrApi.getInstance().setAiEventListener(if (set) aiEventListener else null)
-        Log.d(appTag, "AI event listener ${if (set) "set" else "removed"}")
-    }
+    private fun onAiKeyPressed() {
+        updateStatus("Processing AI request...")
+        showProcessingUI(true)
 
-    /**
-     * Toggle the AI scene on/off
-     */
-    private fun toggleAiScene() {
-        if (isAiSceneOpen) {
-            // Close AI scene by sending exit event
-            closeAiScene()
+        // Reset state
+        capturedImage = null
+        recordedAudioFile = null
+        capturedImageView.visibility = View.GONE
+
+        // Always start audio recording (SDK requirement)
+        startAudioRecording()
+
+        // Capture image if configured
+        if (includeImageCheckBox.isChecked) {
+            updateProcessingStatus("Capturing image...")
+            aiCameraHelper.takePhoto()
         } else {
-            // Note: Opening AI scene is typically triggered by physical button on glasses
-            // This is just a placeholder to show the expected behavior
-            updateStatus("AI scene should be opened by long-pressing the button on the glasses")
-            Toast.makeText(this, "Please long-press the AI button on the glasses to open the scene", Toast.LENGTH_LONG).show()
-
-            // For testing purposes, we'll simulate it being open
-            // In real usage, this would be triggered by onAiKeyDown event
-            isAiSceneOpen = true
-            updateButtonText()
-
-            // Auto-start audio recording when AI scene opens
-            startAudioRecording()
+            updateProcessingStatus("Skipping image capture (not enabled)")
         }
     }
 
     /**
-     * Send exit event to close the AI scene on glasses
-     * @return the status of the exit operation
-     */
-    private fun closeAiScene() {
-        val status = CxrApi.getInstance().sendExitEvent()
-
-        when (status) {
-            ValueUtil.CxrStatus.REQUEST_SUCCEED -> {
-                Log.d(appTag, "AI scene exit request sent successfully")
-                isAiSceneOpen = false
-                updateButtonText()
-                updateStatus("AI scene exit request sent")
-                Toast.makeText(this, "Closing AI scene...", Toast.LENGTH_SHORT).show()
-
-                // Auto-stop recording, save file, and clear cache when AI scene exits from app
-                stopAndSaveAudioRecording()
-            }
-            ValueUtil.CxrStatus.REQUEST_WAITING -> {
-                Log.w(appTag, "Previous AI scene exit request still pending")
-                updateStatus("Exit request pending, please wait...")
-                Toast.makeText(this, "Please wait, previous request still processing", Toast.LENGTH_SHORT).show()
-            }
-            ValueUtil.CxrStatus.REQUEST_FAILED -> {
-                Log.e(appTag, "AI scene exit request failed")
-                updateStatus("Exit request failed")
-                Toast.makeText(this, "Failed to close AI scene", Toast.LENGTH_SHORT).show()
-            }
-            else -> {
-                Log.w(appTag, "Unknown AI scene exit status: $status")
-                updateStatus("Unknown exit status")
-            }
-        }
-    }
-
-    /**
-     * Update the button text based on AI scene state
-     */
-    private fun updateButtonText() {
-        toggleAiSceneButton.text = if (isAiSceneOpen) {
-            "Close AI Scene"
-        } else {
-            "Open AI Scene"
-        }
-    }
-
-    /**
-     * Update the status text view
-     */
-    private fun updateStatus(message: String) {
-        aiSceneStatusTextView.text = message
-    }
-
-    /**
-     * Update the photo status text view
-     */
-    private fun updatePhotoStatus(message: String) {
-        photoStatusTextView.text = message
-    }
-
-    /**
-     * Update the audio status text view
-     */
-    private fun updateAudioStatus(message: String) {
-        audioStatusTextView.text = message
-    }
-
-    /**
-     * Start audio recording (called automatically when AI scene opens)
+     * Start audio recording
      */
     private fun startAudioRecording() {
         if (!audioHelper.isRecording) {
-            Log.i(appTag, "Auto-starting audio recording for AI scene")
-            // Clear any previous cache before starting new recording
+            Log.i(appTag, "Starting audio recording")
             audioHelper.clearAudioCache()
             audioHelper.openAudioRecord(codecType = 1, streamType = "AI_assistant")
-        } else {
-            Log.d(appTag, "Audio recording already active")
+            updateProcessingStatus("Recording audio...")
         }
     }
 
     /**
-     * Stop audio recording, save file, and clear cache (called automatically when AI scene exits)
+     * Process the AI request
+     * Called after audio recording is stopped
      */
-    private fun stopAndSaveAudioRecording() {
-        if (audioHelper.isRecording) {
-            Log.i(appTag, "Auto-stopping audio recording - AI scene exited")
-            // This will stop recording, save the file, and clear the cache
-            audioHelper.closeAudioRecord("AI_assistant")
+    private fun processAiRequest() {
+        val useAsr = useAsrCheckBox.isChecked
+
+        if (useAsr) {
+            // Use ASR to get text from audio
+            processWithASR()
         } else {
-            Log.d(appTag, "No active audio recording to stop")
+            // Show instruction selection dialog
+            showInstructionSelectionDialog()
         }
     }
 
     /**
-     * Toggle audio recording on/off (for manual control if needed)
+     * Process request using ASR
      */
-    private fun toggleAudioRecording() {
-        if (audioHelper.isRecording) {
-            stopAndSaveAudioRecording()
-        } else {
-            startAudioRecording()
-        }
-    }
+    private fun processWithASR() {
+        updateProcessingStatus("Processing voice with ASR...")
 
-    /**
-     * Update the audio button text based on recording state
-     */
-    private fun updateAudioButtonText() {
-        toggleAudioButton.text = if (audioHelper.isRecording) {
-            "Stop Audio Recording"
-        } else {
-            "Start Audio Recording"
-        }
-    }
-
-    /**
-     * Take a photo using the glass camera in AI scene
-     */
-    private fun takePhoto() {
-        aiCameraHelper.takePhoto()
-    }
-
-    /**
-     * Play the most recently recorded audio file
-     */
-    private fun playLastRecording() {
-        val audioPath = audioHelper.lastSavedAudioPath
-
-        if (audioPath == null) {
-            Toast.makeText(this, "No audio recording available to play", Toast.LENGTH_SHORT).show()
-            Log.w(appTag, "No audio file to play")
+        if (recordedAudioFile == null) {
+            Toast.makeText(this, "No audio recorded", Toast.LENGTH_SHORT).show()
+            updateProcessingStatus("Error: No audio available")
             return
         }
 
-        val audioFile = File(audioPath)
-        if (!audioFile.exists()) {
-            Toast.makeText(this, "Audio file not found", Toast.LENGTH_SHORT).show()
-            Log.e(appTag, "Audio file does not exist: $audioPath")
+        // Call ASR API (placeholder)
+        val asrText = callAsrAPI(recordedAudioFile!!)
+        updateProcessingStatus("ASR result: $asrText")
+
+        // Call OpenAI API with ASR text and image
+        callOpenAIAndDisplayResult(asrText)
+    }
+
+    /**
+     * Show dialog to select predefined instruction
+     */
+    private fun showInstructionSelectionDialog() {
+        if (predefinedInstructions.isEmpty()) {
+            Toast.makeText(this, "No predefined instructions. Please add some first.", Toast.LENGTH_LONG).show()
+            updateProcessingStatus("Error: No predefined instructions")
             return
         }
 
-        try {
-            // Stop any currently playing audio
-            stopAudioPlayback()
-
-            // Create and configure MediaPlayer
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(audioPath)
-                prepare()
-
-                // Set completion listener
-                setOnCompletionListener {
-                    Log.d(appTag, "Audio playback completed")
-                    Toast.makeText(this@AITestActivity, "Playback finished", Toast.LENGTH_SHORT).show()
-                    stopAudioPlayback()
-                }
-
-                // Set error listener
-                setOnErrorListener { _, what, extra ->
-                    Log.e(appTag, "MediaPlayer error: what=$what, extra=$extra")
-                    Toast.makeText(this@AITestActivity, "Error playing audio", Toast.LENGTH_SHORT).show()
-                    stopAudioPlayback()
-                    true
-                }
-
-                // Start playback
-                start()
+        AlertDialog.Builder(this)
+            .setTitle("Select Instruction")
+            .setItems(predefinedInstructions.toTypedArray()) { _, which ->
+                val selectedInstruction = predefinedInstructions[which]
+                updateProcessingStatus("Instruction: $selectedInstruction")
+                callOpenAIAndDisplayResult(selectedInstruction)
             }
+            .setNegativeButton("Cancel") { dialog, _ ->
+                dialog.dismiss()
+                updateProcessingStatus("Cancelled")
+                showProcessingUI(false)
+            }
+            .show()
+    }
 
-            val fileName = File(audioPath).name
-            Toast.makeText(this, "Playing: $fileName", Toast.LENGTH_LONG).show()
-            Log.i(appTag, "Started playing audio: $audioPath")
+    /**
+     * Call OpenAI API and display result
+     */
+    private fun callOpenAIAndDisplayResult(instruction: String) {
+        updateProcessingStatus("Sending to AI...")
 
-        } catch (e: Exception) {
-            Log.e(appTag, "Error playing audio file", e)
-            Toast.makeText(this, "Failed to play audio: ${e.message}", Toast.LENGTH_SHORT).show()
-            stopAudioPlayback()
+        // Call OpenAI API (placeholder)
+        val hasImage = capturedImage != null && includeImageCheckBox.isChecked
+        val result = callOpenAIAPI(instruction, if (hasImage) capturedImage else null)
+
+        updateProcessingStatus("AI response received")
+
+        // Display result in custom UI
+        displayResultInCustomUI(result)
+    }
+
+    /**
+     * Placeholder ASR API call
+     */
+    private fun callAsrAPI(audioFile: File): String {
+        // TODO: Implement actual ASR API call
+        Log.d(appTag, "ASR API placeholder called with file: ${audioFile.name}")
+        return "What do you see in this image?"
+    }
+
+    /**
+     * Placeholder OpenAI API call
+     */
+    private fun callOpenAIAPI(instruction: String, image: Bitmap?): String {
+        // TODO: Implement actual OpenAI API call
+        Log.d(appTag, "OpenAI API placeholder called")
+        Log.d(appTag, "Instruction: $instruction")
+        Log.d(appTag, "Has image: ${image != null}")
+
+        return "This is a dummy AI response to: \"$instruction\". ${if (image != null) "Image analysis would be included here." else ""}"
+    }
+
+    /**
+     * Display result in custom UI on glasses
+     */
+    private fun displayResultInCustomUI(resultText: String) {
+        Log.i(appTag, "Displaying result in custom UI: $resultText")
+
+        // Store the result
+        lastResultText = resultText
+        showResultButton.isEnabled = true
+
+        updateProcessingStatus("Displaying result on glasses...")
+
+        // Escape quotes in the result text for JSON
+        val escapedText = resultText.replace("\"", "\\\"")
+
+        // Use correct JSON format based on documentation
+        val customViewData = """
+            {
+                "type": "LinearLayout",
+                "props": {
+                    "layout_width": "match_parent",
+                    "layout_height": "match_parent",
+                    "orientation": "vertical",
+                    "gravity": "center_horizontal",
+                    "paddingTop": "100dp",
+                    "paddingBottom": "100dp",
+                    "backgroundColor": "#FF000000"
+                },
+                "children": [
+                    {
+                        "type": "TextView",
+                        "props": {
+                            "id": "tv_result",
+                            "layout_width": "wrap_content",
+                            "layout_height": "wrap_content",
+                            "text": "$escapedText",
+                            "textSize": "16sp",
+                            "textColor": "#FF00FF00",
+                            "textStyle": "bold"
+                        }
+                    }
+                ]
+            }
+        """.trimIndent()
+
+        // Open custom UI with result
+        val status = CxrApi.getInstance().openCustomView(customViewData)
+        Log.d(appTag, "Open custom view status: $status")
+
+        runOnUiThread {
+            updateProcessingStatus("Sent to glasses (status: $status)")
         }
     }
 
     /**
-     * Stop audio playback and release MediaPlayer resources
+     * Show/hide processing UI elements
      */
-    private fun stopAudioPlayback() {
-        mediaPlayer?.apply {
-            if (isPlaying) {
-                stop()
-                Log.d(appTag, "Audio playback stopped")
-            }
-            release()
+    private fun showProcessingUI(show: Boolean) {
+        processingStatusTextView.visibility = if (show) View.VISIBLE else View.GONE
+        if (!show) {
+            capturedImageView.visibility = View.GONE
         }
-        mediaPlayer = null
+    }
+
+    /**
+     * Update status text
+     */
+    private fun updateStatus(message: String) {
+        statusTextView.text = message
+        Log.d(appTag, "Status: $message")
+    }
+
+    /**
+     * Update processing status text
+     */
+    private fun updateProcessingStatus(message: String) {
+        processingStatusTextView.text = message
+        Log.d(appTag, "Processing: $message")
+    }
+
+    /**
+     * Show dialog to delete instruction
+     */
+    private fun showDeleteInstructionDialog(position: Int) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete Instruction")
+            .setMessage("Delete \"${predefinedInstructions[position]}\"?")
+            .setPositiveButton("Delete") { _, _ ->
+                predefinedInstructions.removeAt(position)
+                instructionsAdapter.notifyDataSetChanged()
+                Toast.makeText(this, "Instruction deleted", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(appTag, "Activity destroying - cleaning up resources")
+        Log.d(appTag, "Activity destroying")
 
-        // Stop and release media player
-        stopAudioPlayback()
-
-        // Release helper resources
+        // Release resources
         aiCameraHelper.release()
         audioHelper.release()
 
-        // Remove AI event listener
-        setAiEventListener(false)
+        // Remove listeners
+        CxrApi.getInstance().setAiEventListener(null)
+        CxrApi.getInstance().setCustomViewListener(null)
     }
 }
