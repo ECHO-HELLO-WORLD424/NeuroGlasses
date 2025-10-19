@@ -325,7 +325,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        bluetoothHelper.release()
-        CxrApi.getInstance().deinitBluetooth()
+        // Only disconnect Bluetooth if the activity is finishing (not just being recreated)
+        if (isFinishing) {
+            bluetoothHelper.release()
+            CxrApi.getInstance().deinitBluetooth()
+            Log.d(appTag, "Activity finishing - Bluetooth disconnected")
+        } else {
+            Log.d(appTag, "Activity being recreated - keeping Bluetooth connection")
+        }
     }
 }
