@@ -30,6 +30,7 @@ import java.io.File
  * - Configure whether to include images in AI chat
  * - Configure whether to use ASR (voice) or predefined instructions
  * - Configure whether to use Text-to-Speech (TTS) for responses
+ * - Configure teleprompter settings (chunk size and update interval)
  * - Manage predefined instructions
  * - Process AI requests when the AI key is pressed on glasses
  */
@@ -42,6 +43,8 @@ class AITestActivity : AppCompatActivity() {
     private lateinit var includeImageCheckBox: CheckBox
     private lateinit var useAsrCheckBox: CheckBox
     private lateinit var useTtsCheckBox: CheckBox
+    private lateinit var chunkSizeEditText: EditText
+    private lateinit var updateIntervalEditText: EditText
     private lateinit var newInstructionEditText: EditText
     private lateinit var addInstructionButton: Button
     private lateinit var instructionsListView: ListView
@@ -90,6 +93,8 @@ class AITestActivity : AppCompatActivity() {
         includeImageCheckBox = findViewById(R.id.includeImageCheckBox)
         useAsrCheckBox = findViewById(R.id.useAsrCheckBox)
         useTtsCheckBox = findViewById(R.id.useTtsCheckBox)
+        chunkSizeEditText = findViewById(R.id.chunkSizeEditText)
+        updateIntervalEditText = findViewById(R.id.updateIntervalEditText)
         newInstructionEditText = findViewById(R.id.newInstructionEditText)
         addInstructionButton = findViewById(R.id.addInstructionButton)
         instructionsListView = findViewById(R.id.instructionsListView)
@@ -482,12 +487,21 @@ class AITestActivity : AppCompatActivity() {
 
         updateProcessingStatus("Displaying result on glasses...")
 
+        // Get teleprompter settings from UI
+        val chunkSize = chunkSizeEditText.text.toString().toIntOrNull() ?: 100
+        val updateInterval = updateIntervalEditText.text.toString().toLongOrNull() ?: 3000L
+
+        // Validate values
+        val validatedChunkSize = if (chunkSize > 0) chunkSize else 100
+        val validatedInterval = if (updateInterval > 0) updateInterval else 3000L
+
+        Log.d(appTag, "Using teleprompter settings: chunkSize=$validatedChunkSize, interval=${validatedInterval}ms")
+
         // Use CustomSceneHelper to display with scrolling
-        // Split text every 100 characters, update every 3 seconds
         val status = customSceneHelper.displayTextResultWithScroll(
             resultText = resultText,
-            chunkSize = 100,
-            updateIntervalMs = 3000
+            chunkSize = validatedChunkSize,
+            updateIntervalMs = validatedInterval
         )
         Log.d(appTag, "Display status: $status")
     }

@@ -113,6 +113,86 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/useTtsCheckBox" />
 
+        <!-- Teleprompter Settings Section -->
+        <TextView
+            android:id="@+id/teleprompterSectionTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Teleprompter Settings"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/ttsHintText" />
+
+        <TextView
+            android:id="@+id/chunkSizeLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Characters per chunk:"
+            android:textSize="14sp"
+            app:layout_constraintEnd_toStartOf="@+id/chunkSizeEditText"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/teleprompterSectionTitle"
+            app:layout_constraintHorizontal_chainStyle="spread_inside"
+            app:layout_constraintHorizontal_weight="1" />
+
+        <EditText
+            android:id="@+id/chunkSizeEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="100"
+            android:inputType="number"
+            android:textSize="14sp"
+            android:gravity="center"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/chunkSizeLabel"
+            app:layout_constraintTop_toTopOf="@+id/chunkSizeLabel"
+            app:layout_constraintBottom_toBottomOf="@+id/chunkSizeLabel"
+            app:layout_constraintHorizontal_weight="0.5" />
+
+        <TextView
+            android:id="@+id/updateIntervalLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Update interval (ms):"
+            android:textSize="14sp"
+            app:layout_constraintEnd_toStartOf="@+id/updateIntervalEditText"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/chunkSizeEditText"
+            app:layout_constraintHorizontal_chainStyle="spread_inside"
+            app:layout_constraintHorizontal_weight="1" />
+
+        <EditText
+            android:id="@+id/updateIntervalEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="3000"
+            android:inputType="number"
+            android:textSize="14sp"
+            android:gravity="center"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/updateIntervalLabel"
+            app:layout_constraintTop_toTopOf="@+id/updateIntervalLabel"
+            app:layout_constraintBottom_toBottomOf="@+id/updateIntervalLabel"
+            app:layout_constraintHorizontal_weight="0.5" />
+
+        <TextView
+            android:id="@+id/teleprompterHintText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Controls how text scrolls on glasses (chunk size: characters shown at once, interval: time between updates)"
+            android:textSize="12sp"
+            android:textColor="@android:color/darker_gray"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/updateIntervalEditText" />
+
         <!-- Predefined Instructions Section -->
         <TextView
             android:id="@+id/instructionsSectionTitle"
@@ -123,7 +203,7 @@
             android:textSize="18sp"
             android:textStyle="bold"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/ttsHintText" />
+            app:layout_constraintTop_toBottomOf="@+id/teleprompterHintText" />
 
         <TextView
             android:id="@+id/instructionsHint"
