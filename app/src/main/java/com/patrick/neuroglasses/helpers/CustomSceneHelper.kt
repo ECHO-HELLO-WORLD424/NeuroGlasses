@@ -1,17 +1,29 @@
 package com.patrick.neuroglasses.helpers
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.MediaPlayer
+import android.os.Handler
+import android.os.Looper
+import android.util.Base64
 import android.util.Log
 import com.rokid.cxr.client.extend.CxrApi
 import com.rokid.cxr.client.extend.listeners.CustomViewListener
+import com.rokid.cxr.client.extend.infos.IconInfo
 import com.rokid.cxr.client.utils.ValueUtil
+import java.io.ByteArrayOutputStream
 import java.io.File
+import androidx.core.graphics.scale
 
 /**
  * Custom Scene Helper
  * Handles custom UI display on AR glasses
  */
-class CustomSceneHelper(private val appTag: String = "CustomSceneHelper") {
+class CustomSceneHelper(
+    private val context: Context,
+    private val appTag: String = "CustomSceneHelper"
+) {
 
     /**
      * Listener interface for custom view events
@@ -43,6 +55,17 @@ class CustomSceneHelper(private val appTag: String = "CustomSceneHelper") {
     private var isCustomViewListenerSet = false
     private var mediaPlayer: MediaPlayer? = null
     private var audioFileToPlay: File? = null
+
+    // Scrolling text variables
+    private val scrollHandler = Handler(Looper.getMainLooper())
+    private var scrollRunnable: Runnable? = null
+    private var textChunks: List<String> = emptyList()
+    private var currentChunkIndex = 0
+    private var isScrolling = false
+
+    // Icon variables
+    private var iconsSent = false
+    private val aiIconName = "ai_icon"
 
     /**
      * Set the listener for custom scene events
@@ -157,6 +180,87 @@ class CustomSceneHelper(private val appTag: String = "CustomSceneHelper") {
     }
 
     /**
+     * Send AI icon to glasses
+     * @return The status of the request
+     */
+    private fun sendAiIcon(): ValueUtil.CxrStatus? {
+        if (iconsSent) {
+            Log.d(appTag, "Icons already sent, skipping")
+            return ValueUtil.CxrStatus.REQUEST_SUCCEED
+        }
+
+        try {
+            // Load the AI icon from drawable resources
+            val resourceId = context.resources.getIdentifier("ai_icon_small", "drawable", context.packageName)
+            if (resourceId == 0) {
+                Log.e(appTag, "AI icon resource not found")
+                return ValueUtil.CxrStatus.REQUEST_FAILED
+            }
+
+            val bitmap = BitmapFactory.decodeResource(context.resources, resourceId)
+            if (bitmap == null) {
+                Log.e(appTag, "Failed to decode AI icon bitmap")
+                return ValueUtil.CxrStatus.REQUEST_FAILED
+            }
+
+            // Resize bitmap to fit within 128x128 requirement if needed
+            val maxSize = 128
+            val resizedBitmap = if (bitmap.width > maxSize || bitmap.height > maxSize) {
+                val scale = minOf(maxSize.toFloat() / bitmap.width, maxSize.toFloat() / bitmap.height)
+                val newWidth = (bitmap.width * scale).toInt()
+                val newHeight = (bitmap.height * scale).toInt()
+                bitmap.scale(newWidth, newHeight).also {
+                    if (it != bitmap) bitmap.recycle()
+                }
+            } else {
+                bitmap
+            }
+
+            // Convert bitmap to Base64
+            val base64Icon = bitmapToBase64(resizedBitmap)
+            resizedBitmap.recycle()
+
+            if (base64Icon == null) {
+                Log.e(appTag, "Failed to convert bitmap to Base64")
+                return ValueUtil.CxrStatus.REQUEST_FAILED
+            }
+
+            // Create IconInfo and send to glasses
+            val iconInfo = IconInfo(aiIconName, base64Icon)
+            val status = CxrApi.getInstance().sendCustomViewIcons(listOf(iconInfo))
+
+            if (status == ValueUtil.CxrStatus.REQUEST_SUCCEED) {
+                iconsSent = true
+                Log.i(appTag, "AI icon sent successfully")
+            } else {
+                Log.e(appTag, "Failed to send AI icon: $status")
+            }
+
+            return status
+        } catch (e: Exception) {
+            Log.e(appTag, "Error sending AI icon: ${e.message}", e)
+            return ValueUtil.CxrStatus.REQUEST_FAILED
+        }
+    }
+
+    /**
+     * Convert bitmap to Base64 string
+     * @param bitmap The bitmap to convert
+     * @return Base64 encoded string or null if failed
+     */
+    private fun bitmapToBase64(bitmap: Bitmap): String? {
+        return try {
+            val outputStream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+            val byteArray = outputStream.toByteArray()
+            Base64.encodeToString(byteArray, Base64.NO_WRAP)
+        } catch (e: Exception) {
+            Log.e(appTag, "Error converting bitmap to Base64: ${e.message}", e)
+            null
+        }
+    }
+
+    /**
      * Display text result on glasses using custom UI
      * @param resultText The text to display
      * @return The status of the request
@@ -167,30 +271,47 @@ class CustomSceneHelper(private val appTag: String = "CustomSceneHelper") {
         // Escape quotes in the result text for JSON
         val escapedText = resultText.replace("\"", "\\\"")
 
-        // Create custom view JSON using LinearLayout format
+        // Send icon first
+        sendAiIcon()
+
+        // Create custom view JSON using RelativeLayout with icon on top left
         val customViewData = """
             {
-                "type": "LinearLayout",
+                "type": "RelativeLayout",
                 "props": {
                     "layout_width": "match_parent",
                     "layout_height": "match_parent",
-                    "orientation": "vertical",
-                    "gravity": "center_horizontal",
-                    "paddingTop": "100dp",
-                    "paddingBottom": "100dp",
-                    "backgroundColor": "#FF000000"
+                    "backgroundColor": "#FF000000",
+                    "paddingStart": "20dp",
+                    "paddingTop": "20dp",
+                    "paddingEnd": "20dp",
+                    "paddingBottom": "20dp"
                 },
                 "children": [
+                    {
+                        "type": "ImageView",
+                        "props": {
+                            "id": "iv_ai_icon",
+                            "layout_width": "48dp",
+                            "layout_height": "48dp",
+                            "name": "$aiIconName",
+                            "scaleType": "center_inside",
+                            "layout_alignParentStart": "true",
+                            "layout_alignParentTop": "true"
+                        }
+                    },
                     {
                         "type": "TextView",
                         "props": {
                             "id": "tv_result",
-                            "layout_width": "wrap_content",
+                            "layout_width": "match_parent",
                             "layout_height": "wrap_content",
                             "text": "$escapedText",
                             "textSize": "16sp",
                             "textColor": "#FF00FF00",
-                            "textStyle": "bold"
+                            "textStyle": "bold",
+                            "layout_below": "iv_ai_icon",
+                            "marginTop": "15dp"
                         }
                     }
                 ]
@@ -240,15 +361,146 @@ class CustomSceneHelper(private val appTag: String = "CustomSceneHelper") {
      */
     fun closeCustomView(): ValueUtil.CxrStatus? {
         Log.d(appTag, "Closing custom view")
+        stopScrolling()
         val status = CxrApi.getInstance().closeCustomView()
         Log.d(appTag, "Close custom view status: $status")
         return status
     }
 
     /**
+     * Display text result with scrolling for long text
+     * @param resultText The text to display
+     * @param chunkSize Number of characters per chunk (default 100)
+     * @param updateIntervalMs Interval between updates in milliseconds (default 3000ms = 3 seconds)
+     * @return The status of the request
+     */
+    fun displayTextResultWithScroll(
+        resultText: String,
+        chunkSize: Int = 100,
+        updateIntervalMs: Long = 3000
+    ): ValueUtil.CxrStatus? {
+        Log.i(appTag, "Displaying text result with scroll: length=${resultText.length}, chunkSize=$chunkSize")
+
+        // Stop any ongoing scrolling
+        stopScrolling()
+
+        // Split text into chunks
+        textChunks = splitTextIntoChunks(resultText, chunkSize)
+        currentChunkIndex = 0
+
+        Log.d(appTag, "Split text into ${textChunks.size} chunks")
+
+        // Display first chunk
+        val status = displayTextResult(textChunks[0])
+
+        // If there are more chunks, start scrolling
+        if (textChunks.size > 1) {
+            startScrolling(updateIntervalMs)
+        }
+
+        return status
+    }
+
+    /**
+     * Split text into chunks of specified size, trying to break at word boundaries
+     * @param text The text to split
+     * @param chunkSize Maximum size per chunk
+     * @return List of text chunks
+     */
+    private fun splitTextIntoChunks(text: String, chunkSize: Int): List<String> {
+        if (text.length <= chunkSize) {
+            return listOf(text)
+        }
+
+        val chunks = mutableListOf<String>()
+        var currentIndex = 0
+
+        while (currentIndex < text.length) {
+            val endIndex = minOf(currentIndex + chunkSize, text.length)
+
+            // If we're not at the end, try to find a good breaking point
+            val actualEndIndex = if (endIndex < text.length) {
+                // Try to break at sentence end (., !, ?)
+                val sentenceBreak = text.lastIndexOf('.', endIndex).takeIf { it > currentIndex }
+                    ?: text.lastIndexOf('!', endIndex).takeIf { it > currentIndex }
+                    ?: text.lastIndexOf('?', endIndex).takeIf { it > currentIndex }
+
+                // If found a sentence break, use it (include the punctuation)
+                if (sentenceBreak != null) {
+                    sentenceBreak + 1
+                } else {
+                    // Otherwise, try to break at word boundary (space)
+                    val spaceIndex = text.lastIndexOf(' ', endIndex)
+                    if (spaceIndex > currentIndex) spaceIndex else endIndex
+                }
+            } else {
+                endIndex
+            }
+
+            val chunk = text.substring(currentIndex, actualEndIndex).trim()
+            if (chunk.isNotEmpty()) {
+                chunks.add(chunk)
+            }
+            currentIndex = actualEndIndex
+        }
+
+        return chunks
+    }
+
+    /**
+     * Start scrolling through text chunks
+     * @param updateIntervalMs Interval between updates in milliseconds
+     */
+    private fun startScrolling(updateIntervalMs: Long) {
+        isScrolling = true
+
+        scrollRunnable = object : Runnable {
+            override fun run() {
+                if (!isScrolling) {
+                    return
+                }
+
+                // Move to next chunk
+                currentChunkIndex++
+
+                if (currentChunkIndex < textChunks.size) {
+                    // Update with next chunk
+                    val chunk = textChunks[currentChunkIndex]
+                    Log.d(appTag, "Updating to chunk ${currentChunkIndex + 1}/${textChunks.size}")
+                    updateTextResult(chunk)
+
+                    // Schedule next update
+                    scrollHandler.postDelayed(this, updateIntervalMs)
+                } else {
+                    // Finished scrolling through all chunks
+                    Log.i(appTag, "Finished scrolling through all ${textChunks.size} chunks")
+                    isScrolling = false
+                }
+            }
+        }
+
+        // Start the scrolling after the first interval
+        scrollHandler.postDelayed(scrollRunnable!!, updateIntervalMs)
+        Log.d(appTag, "Started scrolling with ${textChunks.size} chunks, interval: ${updateIntervalMs}ms")
+    }
+
+    /**
+     * Stop scrolling if currently active
+     */
+    fun stopScrolling() {
+        if (isScrolling) {
+            Log.d(appTag, "Stopping scroll")
+            isScrolling = false
+            scrollRunnable?.let { scrollHandler.removeCallbacks(it) }
+            scrollRunnable = null
+        }
+    }
+
+    /**
      * Release resources and remove listener
      */
     fun release() {
+        stopScrolling()
         stopAudio()
         CxrApi.getInstance().setCustomViewListener(null)
         listener = null

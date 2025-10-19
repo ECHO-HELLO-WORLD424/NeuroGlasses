@@ -251,7 +251,7 @@ class AITestActivity : AppCompatActivity() {
         })
 
         // Initialize Custom Scene helper
-        customSceneHelper = CustomSceneHelper(appTag)
+        customSceneHelper = CustomSceneHelper(this, appTag)
         customSceneHelper.setListener(object : CustomSceneHelper.CustomSceneListener {
             override fun onSceneOpened() {
                 runOnUiThread {
@@ -471,8 +471,13 @@ class AITestActivity : AppCompatActivity() {
 
         updateProcessingStatus("Displaying result on glasses...")
 
-        // Use CustomSceneHelper to display
-        val status = customSceneHelper.displayTextResult(resultText)
+        // Use CustomSceneHelper to display with scrolling
+        // Split text every 100 characters, update every 3 seconds
+        val status = customSceneHelper.displayTextResultWithScroll(
+            resultText = resultText,
+            chunkSize = 100,
+            updateIntervalMs = 3000
+        )
         Log.d(appTag, "Display status: $status")
     }
 
