@@ -1,0 +1,84 @@
+<resources>
+    <string name="app_name">NeuroGlasses</string>
+
+    <!-- Status messages -->
+    <string name="status_scanning">Scanning for devices…</string>
+    <string name="status_bluetooth_not_started">Bluetooth not started</string>
+    <string name="status_bluetooth_initializing">Initializing Bluetooth…</string>
+    <string name="status_bluetooth_initialized">Bluetooth initialized. Scanning…</string>
+    <string name="status_devices_found">Found %d device(s)</string>
+    <string name="status_connecting">Connecting to %s…</string>
+    <string name="status_connected">Connected to %s</string>
+    <string name="status_disconnected">Disconnected from %s</string>
+    <string name="status_connection_failed_mac_null">Connection failed: MAC address is null</string>
+    <string name="status_connection_failed_uuid_null">Connection failed: UUID is null</string>
+    <string name="status_connection_failed">Connection failed: %s</string>
+    <string name="status_connected_successfully">Connected successfully</string>
+    <string name="status_disconnected_simple">Disconnected</string>
+    <string name="status_bluetooth_connection_failed">Bluetooth connection failed: %s</string>
+
+    <!-- Toast messages -->
+    <string name="toast_bluetooth_permission_not_granted">Bluetooth permissions not granted</string>
+    <string name="toast_connected">Connected!</string>
+    <string name="toast_disconnected">Disconnected</string>
+    <string name="toast_connection_failed">Connection failed: %s</string>
+
+    <!-- Dialog messages -->
+    <string name="dialog_connect_title">Connect to Device</string>
+    <string name="dialog_connect_message">Do you want to connect to %s?</string>
+    <string name="dialog_connect_positive">Connect</string>
+    <string name="dialog_connect_negative">Cancel</string>
+
+    <!-- Device list -->
+    <string name="device_bonded">%s (Bonded)</string>
+
+    <!-- Camera messages -->
+    <string name="camera_opening">Opening camera…</string>
+    <string name="camera_opened">Camera opened (%dx%d @ Q%d)</string>
+    <string name="camera_open_timeout">Camera open timeout</string>
+    <string name="camera_open_failed">Camera open failed: %s</string>
+    <string name="camera_not_connected">Please connect to glasses first</string>
+    <string name="camera_permission_required">Camera permission required</string>
+    <string name="camera_exception">Camera exception: %s</string>
+    <string name="camera_all_configs_failed">All camera configurations failed (8H device)</string>
+    <string name="camera_api_null">Camera API returned null</string>
+    <string name="camera_opened_with_fallback">Camera opened (fallback config: %dx%d)</string>
+    <string name="camera_request_sent">Camera request sent to glasses (REQUEST_SUCCEED)</string>
+
+    <!-- Photo messages -->
+    <string name="photo_taking">Taking photo…</string>
+    <string name="photo_success">Photo captured! Size: %d bytes</string>
+    <string name="photo_success_saved">Photo saved: %s</string>
+    <string name="photo_timeout">Photo capture timeout</string>
+    <string name="photo_failed">Photo capture failed: %s</string>
+    <string name="photo_null">Photo data is null</string>
+    <string name="photo_camera_not_open">Camera not open. Start camera first.</string>
+    <string name="photo_exception">Photo exception: %s</string>
+
+    <!-- WiFi messages -->
+    <string name="wifi_connecting">Connecting to glasses WiFi…</string>
+    <string name="wifi_connected">WiFi connected to glasses</string>
+    <string name="wifi_disconnected">WiFi disconnected</string>
+    <string name="wifi_failed">WiFi connection failed: %s</string>
+    <string name="wifi_disabled">Phone WiFi is disabled. Please enable WiFi.</string>
+    <string name="wifi_connect_failed">WiFi P2P connection failed. Try: 1) Disconnect from WiFi networks 2) Wait a few seconds and retry 3) Restart glasses WiFi</string>
+    <string name="wifi_unknown_error">Unknown WiFi error</string>
+    <string name="wifi_bluetooth_not_connected">Please connect Bluetooth first</string>
+    <string name="wifi_permission_required">Nearby WiFi devices permission required for WiFi connection</string>
+    <string name="wifi_location_disabled">Location services required. Please enable location.</string>
+    <string name="toast_wifi_connected">WiFi connected!</string>
+    <string name="toast_wifi_disconnected">WiFi disconnected</string>
+    <string name="toast_wifi_permission_not_granted">WiFi permission not granted</string>
+
+    <!-- File sync messages -->
+    <string name="sync_no_photo">No photo to sync. Take a photo first.</string>
+    <string name="sync_wifi_not_connected">WiFi must be connected to sync photos</string>
+    <string name="sync_syncing">Syncing photo from glasses…</string>
+    <string name="sync_started">Photo sync started</string>
+    <string name="sync_success">Photo synced successfully: %s</string>
+    <string name="sync_failed">Photo sync failed</string>
+    <string name="sync_finished">Photo sync finished</string>
+    <string name="sync_permission_required">Storage permission required to save photos</string>
+    <string name="toast_sync_success">Photo downloaded to: %s</string>
+    <string name="toast_sync_failed">Failed to sync photo</string>
+</resources>
