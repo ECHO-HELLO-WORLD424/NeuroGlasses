@@ -38,14 +38,20 @@ NeuroGlasses is an Android app that bridges the gap between AR glasses and vario
 
 ## Installation Guide
 
-> **Note:** This is an experimental application and is not available on the Google Play Store.
+> **Note:** This is an experimental application. Although highly unlikely, it may fail on or crash some devices. There's signed APK created with andriod studio in the release, use only if you understand the risk.
 
-### Step 1: Build and Deploy
+### Step 1: Installation:
+
+**Build From Source**
 
 1. Open the project in Android Studio
 2. Connect your Android device via USB (with USB debugging enabled)
 3. Select your device from the deployment target list
 4. Click the **Run** button
+
+**Use Pre-built APK**
+
+1. Go to the release page, find the apk and install it on your andriod device (Note: they are for your phone and tablet, not the glasses itself!)
 
 ### Step 2: Grant Permissions
 
