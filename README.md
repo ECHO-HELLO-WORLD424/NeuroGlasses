@@ -115,7 +115,7 @@ The app is designed to work with OpenAI-compatible APIs. It has been tested with
 
 ## Technical Architecture
 
-![Architecture](/home/patrick/Data/AppData/Dev/AndroidStudioProjects/NeuroGlasses/NeuroGlasses.png)
+![Architecture](./NeuroGlasses.png)
 
 ## Troubleshooting
 
