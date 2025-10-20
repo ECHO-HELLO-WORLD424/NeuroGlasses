@@ -164,6 +164,18 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
          * @param error Error message
          */
         fun onTtsFailed(error: String)
+
+        /**
+         * Called when TTS streaming starts
+         */
+        fun onTtsStreamingStarted() {}
+
+        /**
+         * Called when a TTS audio chunk is received
+         * @param audioChunk The audio data chunk
+         * @param isComplete Whether this is the final chunk
+         */
+        fun onTtsStreamingChunk(audioChunk: ByteArray, isComplete: Boolean) {}
     }
 
     private var listener: OpenAIListener? = null
@@ -340,7 +352,7 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
                     }
 
                     val fullResponse = StringBuilder()
-                    val buffer = okio.Buffer()
+                    okio.Buffer()
 
                     // Parse Server-Sent Events with buffered reading to avoid blocking on newlines
                     try {
@@ -349,7 +361,7 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
                             // This uses a buffered approach that won't wait for newlines
                             val line = try {
                                 source.readUtf8LineStrict()
-                            } catch (e: java.io.EOFException) {
+                            } catch (_: java.io.EOFException) {
                                 // Handle case where stream ends without final newline
                                 Log.d(appTag, "Stream ended")
                                 break
@@ -400,7 +412,7 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
                                 }
                             }
                         }
-                    } catch (e: java.net.SocketTimeoutException) {
+                    } catch (_: java.net.SocketTimeoutException) {
                         Log.e(appTag, "Streaming read timeout - this may indicate the server is not sending data in SSE format")
                         listener?.onOpenAIFailed("Streaming timeout: server may not be sending proper SSE format")
                         return@Thread
@@ -438,12 +450,13 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
     }
 
     /**
-     * Call TTS API to convert text to speech
+     * Call TTS API to convert text to speech with streaming support
      * @param text The text to convert to speech
      * @param outputDir The directory to save the audio file
+     * @param streaming If true, streams audio chunks as they arrive; if false, waits for complete file
      */
-    fun callTtsAPI(text: String, outputDir: File) {
-        Log.d(appTag, "TTS API called with text: $text")
+    fun callTtsAPI(text: String, outputDir: File, streaming: Boolean = true) {
+        Log.d(appTag, "TTS API called with text: $text (streaming: $streaming)")
 
         if (!outputDir.exists()) {
             outputDir.mkdirs()
@@ -471,31 +484,12 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
                     .post(requestBody)
                     .build()
 
-                // Execute the request
-                getClient().newCall(httpRequest).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        val errorBody = response.body?.string() ?: "Unknown error"
-                        Log.e(appTag, "TTS API call failed: ${response.code} - $errorBody")
-                        listener?.onTtsFailed("TTS API call failed: ${response.code}")
-                        return@Thread
-                    }
-
-                    // Save the audio data to file
-                    val audioBytes = response.body?.bytes()
-                    if (audioBytes != null && audioBytes.isNotEmpty()) {
-                        val timestamp = System.currentTimeMillis()
-                        val audioFile = File(outputDir, "tts_result_$timestamp.mp3")
-
-                        audioFile.outputStream().use { fileOut ->
-                            fileOut.write(audioBytes)
-                        }
-
-                        Log.d(appTag, "TTS audio saved to: ${audioFile.absolutePath} (${audioBytes.size} bytes)")
-                        listener?.onTtsComplete(audioFile)
-                    } else {
-                        Log.e(appTag, "Empty TTS response body")
-                        listener?.onTtsFailed("Empty audio response")
-                    }
+                if (streaming) {
+                    // Streaming mode: send chunks as they arrive
+                    callTtsAPIStreaming(httpRequest, outputDir)
+                } else {
+                    // Non-streaming mode: wait for complete file
+                    callTtsAPINonStreaming(httpRequest, outputDir)
                 }
             } catch (e: IOException) {
                 Log.e(appTag, "Network error during TTS: ${e.message}", e)
@@ -505,6 +499,131 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
                 listener?.onTtsFailed("Error: ${e.message}")
             }
         }.start()
+    }
+
+    /**
+     * Call TTS API in streaming mode
+     */
+    private fun callTtsAPIStreaming(httpRequest: Request, outputDir: File) {
+        // Execute the request with streaming
+        getClient(isStreaming = true).newCall(httpRequest).execute().use { response ->
+            val contentType = response.body?.contentType()
+            val contentLength = response.body?.contentLength()
+            Log.d(appTag, "TTS response received: code=${response.code}, contentType=$contentType, contentLength=$contentLength")
+
+            if (!response.isSuccessful) {
+                val errorBody = response.body?.string() ?: "Unknown error"
+                Log.e(appTag, "TTS API call failed: ${response.code} - $errorBody")
+                listener?.onTtsFailed("TTS API call failed: ${response.code}")
+                return
+            }
+
+            // Check if response is actually audio
+            if (contentType?.toString()?.startsWith("text/") == true) {
+                // Server returned text instead of audio - likely an error message
+                val errorText = response.body?.string() ?: "Unknown error"
+                Log.e(appTag, "TTS API returned text instead of audio: $errorText")
+                listener?.onTtsFailed("TTS API error: $errorText")
+                return
+            }
+
+            // Notify streaming started
+            listener?.onTtsStreamingStarted()
+            Log.d(appTag, "TTS streaming started")
+
+            // Read the streaming response
+            val inputStream = response.body?.byteStream()
+            if (inputStream == null) {
+                Log.e(appTag, "Empty TTS response body")
+                listener?.onTtsFailed("Empty audio response")
+                return
+            }
+
+            Log.d(appTag, "Input stream obtained, starting to read chunks...")
+
+            // Create file to save complete audio for later use
+            val timestamp = System.currentTimeMillis()
+            val audioFile = File(outputDir, "tts_result_$timestamp.mp3")
+            val fileOutputStream = audioFile.outputStream()
+
+            try {
+                // Stream audio data in chunks
+                val buffer = ByteArray(4096) // 4KB chunks
+                var bytesRead: Int
+                var totalBytes = 0L
+                var chunkCount = 0
+
+                Log.d(appTag, "Starting read loop...")
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    chunkCount++
+                    Log.d(appTag, "Read attempt #$chunkCount: $bytesRead bytes")
+
+                    if (bytesRead > 0) {
+                        // Create a chunk of the exact size read
+                        val chunk = buffer.copyOf(bytesRead)
+
+                        // Save to file
+                        fileOutputStream.write(chunk)
+                        totalBytes += bytesRead
+
+                        // Send chunk to listener for immediate playback
+                        listener?.onTtsStreamingChunk(chunk, false)
+
+                        Log.d(appTag, "TTS chunk received: $bytesRead bytes (total: $totalBytes)")
+                    }
+                }
+
+                Log.d(appTag, "Read loop completed after $chunkCount iterations")
+
+                // Notify streaming complete
+                listener?.onTtsStreamingChunk(ByteArray(0), true)
+                Log.d(appTag, "TTS streaming completed: $totalBytes bytes")
+
+                // Close file stream
+                fileOutputStream.close()
+
+                // Notify that the complete file is ready
+                Log.d(appTag, "TTS audio saved to: ${audioFile.absolutePath} ($totalBytes bytes)")
+                listener?.onTtsComplete(audioFile)
+
+            } catch (e: Exception) {
+                fileOutputStream.close()
+                Log.e(appTag, "Error during TTS streaming: ${e.message}", e)
+                listener?.onTtsFailed("Streaming error: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Call TTS API in non-streaming mode (original behavior)
+     */
+    private fun callTtsAPINonStreaming(httpRequest: Request, outputDir: File) {
+        // Execute the request
+        getClient().newCall(httpRequest).execute().use { response ->
+            if (!response.isSuccessful) {
+                val errorBody = response.body?.string() ?: "Unknown error"
+                Log.e(appTag, "TTS API call failed: ${response.code} - $errorBody")
+                listener?.onTtsFailed("TTS API call failed: ${response.code}")
+                return
+            }
+
+            // Save the audio data to file
+            val audioBytes = response.body?.bytes()
+            if (audioBytes != null && audioBytes.isNotEmpty()) {
+                val timestamp = System.currentTimeMillis()
+                val audioFile = File(outputDir, "tts_result_$timestamp.mp3")
+
+                audioFile.outputStream().use { fileOut ->
+                    fileOut.write(audioBytes)
+                }
+
+                Log.d(appTag, "TTS audio saved to: ${audioFile.absolutePath} (${audioBytes.size} bytes)")
+                listener?.onTtsComplete(audioFile)
+            } else {
+                Log.e(appTag, "Empty TTS response body")
+                listener?.onTtsFailed("Empty audio response")
+            }
+        }
     }
 
     /**

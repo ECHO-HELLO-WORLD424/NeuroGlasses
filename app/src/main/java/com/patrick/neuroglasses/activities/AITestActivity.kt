@@ -19,6 +19,7 @@ import com.patrick.neuroglasses.helpers.AICameraHelper
 import com.patrick.neuroglasses.helpers.AudioHelper
 import com.patrick.neuroglasses.helpers.CustomSceneHelper
 import com.patrick.neuroglasses.helpers.OpenAIHelper
+import com.patrick.neuroglasses.helpers.StreamingAudioPlayer
 import com.rokid.cxr.client.extend.CxrApi
 import com.rokid.cxr.client.extend.listeners.AiEventListener
 import java.io.File
@@ -56,6 +57,7 @@ class AITestActivity : AppCompatActivity() {
     private lateinit var audioHelper: AudioHelper
     private lateinit var openAIHelper: OpenAIHelper
     private lateinit var customSceneHelper: CustomSceneHelper
+    private lateinit var streamingAudioPlayer: StreamingAudioPlayer
 
     // Data
     private val predefinedInstructions = mutableListOf<String>()
@@ -296,12 +298,11 @@ class AITestActivity : AppCompatActivity() {
                     updateProcessingStatus("Speech generated successfully")
                     Log.i(appTag, "TTS complete: ${audioFile.absolutePath}")
 
-                    // Set audio file in custom scene helper
+                    // Set audio file in custom scene helper for potential later use
                     customSceneHelper.setAudioFile(audioFile)
 
-                    // Play the audio immediately
-                    customSceneHelper.playAudio(audioFile)
-                    Log.d(appTag, "Playing TTS audio")
+                    // Note: Audio is already playing via streaming, this is just the complete file notification
+                    Log.d(appTag, "Complete TTS audio file saved: ${audioFile.absolutePath}")
                 }
             }
 
@@ -310,6 +311,33 @@ class AITestActivity : AppCompatActivity() {
                     updateProcessingStatus("TTS failed: $error")
                     Toast.makeText(this@AITestActivity, "Speech generation failed: $error", Toast.LENGTH_SHORT).show()
                     Log.e(appTag, "TTS failed: $error")
+                }
+            }
+
+            override fun onTtsStreamingStarted() {
+                runOnUiThread {
+                    updateProcessingStatus("Streaming audio generation started...")
+                    Log.i(appTag, "TTS streaming started")
+
+                    // Initialize streaming audio player
+                    streamingAudioPlayer.initializeStreaming()
+                }
+            }
+
+            override fun onTtsStreamingChunk(audioChunk: ByteArray, isComplete: Boolean) {
+                runOnUiThread {
+                    if (audioChunk.isNotEmpty()) {
+                        // Add chunk to streaming player
+                        streamingAudioPlayer.addChunk(audioChunk)
+                        Log.v(appTag, "TTS chunk added to player: ${audioChunk.size} bytes")
+                    }
+
+                    if (isComplete) {
+                        // Finalize streaming
+                        streamingAudioPlayer.finalizeStreaming()
+                        updateProcessingStatus("Audio streaming completed")
+                        Log.i(appTag, "TTS streaming finalized")
+                    }
                 }
             }
         })
@@ -344,6 +372,32 @@ class AITestActivity : AppCompatActivity() {
             }
         })
         customSceneHelper.initializeCustomViewListener()
+
+        // Initialize Streaming Audio Player
+        streamingAudioPlayer = StreamingAudioPlayer(appTag)
+        streamingAudioPlayer.setListener(object : StreamingAudioPlayer.PlaybackListener {
+            override fun onPlaybackStarted() {
+                runOnUiThread {
+                    updateProcessingStatus("Audio playback started")
+                    Log.i(appTag, "Streaming audio playback started")
+                }
+            }
+
+            override fun onPlaybackCompleted() {
+                runOnUiThread {
+                    updateProcessingStatus("Audio playback completed")
+                    Log.i(appTag, "Streaming audio playback completed")
+                }
+            }
+
+            override fun onPlaybackError(error: String) {
+                runOnUiThread {
+                    updateProcessingStatus("Audio playback error: $error")
+                    Toast.makeText(this@AITestActivity, "Audio playback error: $error", Toast.LENGTH_SHORT).show()
+                    Log.e(appTag, "Streaming audio playback error: $error")
+                }
+            }
+        })
     }
 
     private fun setupInstructions() {
@@ -591,6 +645,7 @@ class AITestActivity : AppCompatActivity() {
         audioHelper.release()
         openAIHelper.release()
         customSceneHelper.release()
+        streamingAudioPlayer.release()
 
         // Remove listeners
         CxrApi.getInstance().setAiEventListener(null)
