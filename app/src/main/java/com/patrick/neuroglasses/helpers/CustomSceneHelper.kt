@@ -160,15 +160,20 @@ class CustomSceneHelper(
     /**
      * Stop audio playback
      */
-    private fun stopAudio() {
+    fun stopAudio() {
         mediaPlayer?.apply {
-            if (isPlaying) {
-                stop()
-                Log.d(appTag, "Audio playback stopped")
+            try {
+                if (isPlaying) {
+                    stop()
+                    Log.d(appTag, "Audio playback stopped")
+                }
+            } catch (e: IllegalStateException) {
+                Log.w(appTag, "MediaPlayer already stopped: ${e.message}")
             }
             release()
         }
         mediaPlayer = null
+        audioFileToPlay = null
     }
 
     /**

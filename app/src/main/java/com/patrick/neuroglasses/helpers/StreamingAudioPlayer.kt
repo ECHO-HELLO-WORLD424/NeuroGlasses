@@ -323,15 +323,35 @@ class StreamingAudioPlayer(private val appTag: String = "StreamingAudioPlayer") 
      */
     private fun cleanupPlaybackResources() {
         try {
-            mediaCodec?.stop()
-            mediaCodec?.release()
+            // Clean up MediaCodec first
+            mediaCodec?.apply {
+                try {
+                    stop()
+                } catch (e: IllegalStateException) {
+                    Log.w(appTag, "MediaCodec already stopped: ${e.message}")
+                }
+                release()
+            }
             mediaCodec = null
 
-            audioTrack?.stop()
-            audioTrack?.release()
+            // Then clean up AudioTrack
+            audioTrack?.apply {
+                try {
+                    // Pause first to stop playback immediately
+                    pause()
+                    // Flush any buffered audio data to prevent fragments from playing
+                    flush()
+                    // Now stop and release
+                    stop()
+                } catch (e: IllegalStateException) {
+                    Log.w(appTag, "AudioTrack already stopped: ${e.message}")
+                }
+                release()
+            }
             audioTrack = null
 
             isPlaying = false
+            Log.d(appTag, "Playback resources cleaned up")
         } catch (e: Exception) {
             Log.e(appTag, "Error cleaning up playback resources: ${e.message}", e)
         }

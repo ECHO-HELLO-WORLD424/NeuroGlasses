@@ -478,6 +478,10 @@ class AITestActivity : AppCompatActivity() {
         updateStatus("Processing AI request...")
         showProcessingUI(true)
 
+        // Stop any ongoing audio playback from previous request
+        streamingAudioPlayer.stop()
+        customSceneHelper.stopAudio()
+
         // Reset state
         capturedImage = null
         recordedAudioFile = null
