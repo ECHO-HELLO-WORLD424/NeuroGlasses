@@ -118,7 +118,7 @@ class CustomSceneHelper(
      * Play audio file
      * @param audioFile The audio file to play
      */
-    private fun playAudio(audioFile: File) {
+    fun playAudio(audioFile: File) {
         if (!audioFile.exists()) {
             Log.e(appTag, "Audio file does not exist: ${audioFile.path}")
             return

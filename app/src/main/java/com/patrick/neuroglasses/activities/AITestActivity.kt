@@ -299,8 +299,9 @@ class AITestActivity : AppCompatActivity() {
                     // Set audio file in custom scene helper
                     customSceneHelper.setAudioFile(audioFile)
 
-                    // Play the audio (the custom scene helper will handle this)
-                    Log.d(appTag, "TTS audio ready for playback")
+                    // Play the audio immediately
+                    customSceneHelper.playAudio(audioFile)
+                    Log.d(appTag, "Playing TTS audio")
                 }
             }
 
