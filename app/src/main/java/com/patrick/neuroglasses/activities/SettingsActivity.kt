@@ -45,8 +45,8 @@ class SettingsActivity : AppCompatActivity() {
         const val DEFAULT_VLM_MODEL = "Qwen/Qwen3-VL-30B-A3B-Instruct"
         const val DEFAULT_VLM_MAX_TOKENS = 1024
         const val DEFAULT_ASR_MODEL = "TeleAI/TeleSpeechASR"
-        const val DEFAULT_TTS_MODEL = "IndexTeam/IndexTTS-2"
-        const val DEFAULT_TTS_VOICE = "speech:neuro-glasses:d1jud8rk20jc738kdhng:cjnfwzkhoeaxofdnrvrz"
+        const val DEFAULT_TTS_MODEL = "FunAudioLLM/CosyVoice2-0.5B"
+        const val DEFAULT_TTS_VOICE = "speech:CozyNeuro:d1jud8rk20jc738kdhng:awfuidogpvwibtwohfca"
 
         // Helper functions to get configuration values
         fun getApiBaseUrl(context: Context): String {
