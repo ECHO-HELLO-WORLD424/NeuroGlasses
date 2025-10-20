@@ -23,7 +23,8 @@ data class OpenAIRequest(
     val model: String,
     val messages: List<Message>,
     @SerializedName("max_tokens")
-    val maxTokens: Int
+    val maxTokens: Int,
+    val stream: Boolean = false
 )
 
 data class Message(
@@ -42,20 +43,23 @@ data class ImageUrl(
     val url: String
 )
 
-data class OpenAIResponse(
+/**
+ * Data classes for streaming responses
+ */
+data class StreamingResponse(
     val id: String,
-    val choices: List<Choice>
+    val choices: List<StreamingChoice>
 )
 
-data class Choice(
-    val message: MessageResponse,
+data class StreamingChoice(
+    val delta: Delta,
     @SerializedName("finish_reason")
-    val finishReason: String
+    val finishReason: String?
 )
 
-data class MessageResponse(
-    val role: String,
-    val content: String
+data class Delta(
+    val role: String?,
+    val content: String?
 )
 
 /**
@@ -94,11 +98,13 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
     private fun getTtsVoice(): String = SettingsActivity.getTtsVoice(context)
 
     // Build OkHttpClient with configurable timeout
-    private fun getClient(): OkHttpClient {
+    private fun getClient(isStreaming: Boolean = false): OkHttpClient {
         val timeoutSeconds = getApiTimeout().toLong()
         return OkHttpClient.Builder()
             .connectTimeout(timeoutSeconds, TimeUnit.SECONDS)
-            .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
+            // For streaming, use a longer read timeout to allow for slower chunk delivery
+            // but still respect the configured timeout as a baseline
+            .readTimeout(if (isStreaming) timeoutSeconds * 2 else timeoutSeconds, TimeUnit.SECONDS)
             .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
             .build()
     }
@@ -124,10 +130,22 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
         fun onAsrFailed(error: String)
 
         /**
-         * Called when OpenAI API response is received
+         * Called when OpenAI API response is received (non-streaming)
          * @param response The AI-generated response text
          */
         fun onOpenAIResponse(response: String)
+
+        /**
+         * Called when OpenAI streaming starts
+         */
+        fun onOpenAIStreamingStarted() {}
+
+        /**
+         * Called when a streaming chunk is received
+         * @param chunk The text chunk received
+         * @param isComplete Whether this is the final chunk
+         */
+        fun onOpenAIStreamingChunk(chunk: String, isComplete: Boolean) {}
 
         /**
          * Called when OpenAI API call fails
@@ -231,12 +249,12 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
     }
 
     /**
-     * Call OpenAI API for chat completion
+     * Call OpenAI API for chat completion with streaming
      * @param instruction The user instruction/prompt
      * @param image Optional image to include in the request (for vision models)
      */
-    fun callOpenAI(instruction: String, image: Bitmap?) {
-        Log.d(appTag, "OpenAI API called")
+    fun callOpenAIStreaming(instruction: String, image: Bitmap?) {
+        Log.d(appTag, "OpenAI Streaming API called")
         Log.d(appTag, "Instruction: $instruction")
         Log.d(appTag, "Has image: ${image != null}")
 
@@ -280,11 +298,12 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
                     )
                 )
 
-                // Create the request
+                // Create the request with streaming enabled
                 val request = OpenAIRequest(
                     model = getVlmModel(),
                     messages = messagesList,
-                    maxTokens = getVlmMaxTokens()
+                    maxTokens = getVlmMaxTokens(),
+                    stream = true
                 )
 
                 // Convert request to JSON
@@ -300,8 +319,11 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
                     .post(requestBody)
                     .build()
 
-                // Execute the request
-                getClient().newCall(httpRequest).execute().use { response ->
+                // Notify streaming started
+                listener?.onOpenAIStreamingStarted()
+
+                // Execute the request with streaming-specific timeout
+                getClient(isStreaming = true).newCall(httpRequest).execute().use { response ->
                     if (!response.isSuccessful) {
                         val errorBody = response.body?.string() ?: "Unknown error"
                         Log.e(appTag, "API call failed: ${response.code} - $errorBody")
@@ -309,30 +331,95 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
                         return@Thread
                     }
 
-                    val responseBody = response.body?.string()
-                    Log.d(appTag, "Response: $responseBody")
-
-                    if (responseBody != null) {
-                        val openAIResponse = gson.fromJson(responseBody, OpenAIResponse::class.java)
-                        val aiMessage = openAIResponse.choices.firstOrNull()?.message?.content
-
-                        if (aiMessage != null) {
-                            Log.d(appTag, "AI Response: $aiMessage")
-                            listener?.onOpenAIResponse(aiMessage)
-                        } else {
-                            Log.e(appTag, "No response content found")
-                            listener?.onOpenAIFailed("No response content")
-                        }
-                    } else {
+                    // Read the streaming response
+                    val source = response.body?.source()
+                    if (source == null) {
                         Log.e(appTag, "Empty response body")
                         listener?.onOpenAIFailed("Empty response")
+                        return@Thread
+                    }
+
+                    val fullResponse = StringBuilder()
+                    val buffer = okio.Buffer()
+
+                    // Parse Server-Sent Events with buffered reading to avoid blocking on newlines
+                    try {
+                        while (!source.exhausted()) {
+                            // Read available data without blocking indefinitely
+                            // This uses a buffered approach that won't wait for newlines
+                            val line = try {
+                                source.readUtf8LineStrict()
+                            } catch (e: java.io.EOFException) {
+                                // Handle case where stream ends without final newline
+                                Log.d(appTag, "Stream ended")
+                                break
+                            }
+
+                            if (line.isEmpty()) {
+                                // SSE uses blank lines as delimiters between messages
+                                continue
+                            }
+
+                            Log.v(appTag, "Raw SSE line: $line")
+
+                            // SSE format: "data: {json}"
+                            if (line.startsWith("data: ")) {
+                                val data = line.substring(6).trim()
+
+                                // Check for [DONE] marker
+                                if (data == "[DONE]") {
+                                    Log.d(appTag, "Streaming completed with [DONE] marker")
+                                    listener?.onOpenAIStreamingChunk("", true)
+                                    break
+                                }
+
+                                // Skip empty data lines
+                                if (data.isEmpty()) {
+                                    continue
+                                }
+
+                                try {
+                                    // Parse the JSON chunk
+                                    val streamingResponse = gson.fromJson(data, StreamingResponse::class.java)
+                                    val delta = streamingResponse.choices.firstOrNull()?.delta
+                                    val content = delta?.content
+
+                                    if (content != null && content.isNotEmpty()) {
+                                        fullResponse.append(content)
+                                        Log.d(appTag, "Received chunk: $content")
+
+                                        // Check if this is the final chunk
+                                        val finishReason = streamingResponse.choices.firstOrNull()?.finishReason
+                                        val isComplete = finishReason != null
+
+                                        listener?.onOpenAIStreamingChunk(content, isComplete)
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(appTag, "Error parsing streaming chunk: ${e.message}, data: $data")
+                                    // Continue processing remaining chunks
+                                }
+                            }
+                        }
+                    } catch (e: java.net.SocketTimeoutException) {
+                        Log.e(appTag, "Streaming read timeout - this may indicate the server is not sending data in SSE format")
+                        listener?.onOpenAIFailed("Streaming timeout: server may not be sending proper SSE format")
+                        return@Thread
+                    }
+
+                    // Also send the full response to the non-streaming callback for backwards compatibility
+                    val finalResponse = fullResponse.toString()
+                    if (finalResponse.isNotEmpty()) {
+                        Log.d(appTag, "Full streaming response: $finalResponse")
+                        listener?.onOpenAIResponse(finalResponse)
+                    } else {
+                        Log.w(appTag, "Streaming completed but no content was received")
                     }
                 }
             } catch (e: IOException) {
                 Log.e(appTag, "Network error: ${e.message}", e)
                 listener?.onOpenAIFailed("Network error: ${e.message}")
             } catch (e: Exception) {
-                Log.e(appTag, "Error calling OpenAI API: ${e.message}", e)
+                Log.e(appTag, "Error calling OpenAI Streaming API: ${e.message}", e)
                 listener?.onOpenAIFailed("Error: ${e.message}")
             }
         }.start()

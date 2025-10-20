@@ -4,8 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaPlayer
-import android.os.Handler
-import android.os.Looper
 import android.util.Base64
 import android.util.Log
 import com.patrick.neuroglasses.R
@@ -56,13 +54,6 @@ class CustomSceneHelper(
     private var isCustomViewListenerSet = false
     private var mediaPlayer: MediaPlayer? = null
     private var audioFileToPlay: File? = null
-
-    // Scrolling text variables
-    private val scrollHandler = Handler(Looper.getMainLooper())
-    private var scrollRunnable: Runnable? = null
-    private var textChunks: List<String> = emptyList()
-    private var currentChunkIndex = 0
-    private var isScrolling = false
 
     // Icon variables
     private var iconsSent = false
@@ -356,146 +347,15 @@ class CustomSceneHelper(
      */
     fun closeCustomView(): ValueUtil.CxrStatus? {
         Log.d(appTag, "Closing custom view")
-        stopScrolling()
         val status = CxrApi.getInstance().closeCustomView()
         Log.d(appTag, "Close custom view status: $status")
         return status
     }
 
     /**
-     * Display text result with scrolling for long text
-     * @param resultText The text to display
-     * @param chunkSize Number of characters per chunk (default 100)
-     * @param updateIntervalMs Interval between updates in milliseconds (default 3000ms = 3 seconds)
-     * @return The status of the request
-     */
-    fun displayTextResultWithScroll(
-        resultText: String,
-        chunkSize: Int = 100,
-        updateIntervalMs: Long = 3000
-    ): ValueUtil.CxrStatus? {
-        Log.i(appTag, "Displaying text result with scroll: length=${resultText.length}, chunkSize=$chunkSize")
-
-        // Stop any ongoing scrolling
-        stopScrolling()
-
-        // Split text into chunks
-        textChunks = splitTextIntoChunks(resultText, chunkSize)
-        currentChunkIndex = 0
-
-        Log.d(appTag, "Split text into ${textChunks.size} chunks")
-
-        // Display first chunk
-        val status = displayTextResult(textChunks[0])
-
-        // If there are more chunks, start scrolling
-        if (textChunks.size > 1) {
-            startScrolling(updateIntervalMs)
-        }
-
-        return status
-    }
-
-    /**
-     * Split text into chunks of specified size, trying to break at word boundaries
-     * @param text The text to split
-     * @param chunkSize Maximum size per chunk
-     * @return List of text chunks
-     */
-    private fun splitTextIntoChunks(text: String, chunkSize: Int): List<String> {
-        if (text.length <= chunkSize) {
-            return listOf(text)
-        }
-
-        val chunks = mutableListOf<String>()
-        var currentIndex = 0
-
-        while (currentIndex < text.length) {
-            val endIndex = minOf(currentIndex + chunkSize, text.length)
-
-            // If we're not at the end, try to find a good breaking point
-            val actualEndIndex = if (endIndex < text.length) {
-                // Try to break at sentence end (., !, ?)
-                val sentenceBreak = text.lastIndexOf('.', endIndex).takeIf { it > currentIndex }
-                    ?: text.lastIndexOf('!', endIndex).takeIf { it > currentIndex }
-                    ?: text.lastIndexOf('?', endIndex).takeIf { it > currentIndex }
-
-                // If found a sentence break, use it (include the punctuation)
-                if (sentenceBreak != null) {
-                    sentenceBreak + 1
-                } else {
-                    // Otherwise, try to break at word boundary (space)
-                    val spaceIndex = text.lastIndexOf(' ', endIndex)
-                    if (spaceIndex > currentIndex) spaceIndex else endIndex
-                }
-            } else {
-                endIndex
-            }
-
-            val chunk = text.substring(currentIndex, actualEndIndex).trim()
-            if (chunk.isNotEmpty()) {
-                chunks.add(chunk)
-            }
-            currentIndex = actualEndIndex
-        }
-
-        return chunks
-    }
-
-    /**
-     * Start scrolling through text chunks
-     * @param updateIntervalMs Interval between updates in milliseconds
-     */
-    private fun startScrolling(updateIntervalMs: Long) {
-        isScrolling = true
-
-        scrollRunnable = object : Runnable {
-            override fun run() {
-                if (!isScrolling) {
-                    return
-                }
-
-                // Move to next chunk
-                currentChunkIndex++
-
-                if (currentChunkIndex < textChunks.size) {
-                    // Update with next chunk
-                    val chunk = textChunks[currentChunkIndex]
-                    Log.d(appTag, "Updating to chunk ${currentChunkIndex + 1}/${textChunks.size}")
-                    updateTextResult(chunk)
-
-                    // Schedule next update
-                    scrollHandler.postDelayed(this, updateIntervalMs)
-                } else {
-                    // Finished scrolling through all chunks
-                    Log.i(appTag, "Finished scrolling through all ${textChunks.size} chunks")
-                    isScrolling = false
-                }
-            }
-        }
-
-        // Start the scrolling after the first interval
-        scrollHandler.postDelayed(scrollRunnable!!, updateIntervalMs)
-        Log.d(appTag, "Started scrolling with ${textChunks.size} chunks, interval: ${updateIntervalMs}ms")
-    }
-
-    /**
-     * Stop scrolling if currently active
-     */
-    fun stopScrolling() {
-        if (isScrolling) {
-            Log.d(appTag, "Stopping scroll")
-            isScrolling = false
-            scrollRunnable?.let { scrollHandler.removeCallbacks(it) }
-            scrollRunnable = null
-        }
-    }
-
-    /**
      * Release resources and remove listener
      */
     fun release() {
-        stopScrolling()
         stopAudio()
         CxrApi.getInstance().setCustomViewListener(null)
         listener = null

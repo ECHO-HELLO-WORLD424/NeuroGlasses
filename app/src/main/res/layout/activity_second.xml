@@ -154,44 +154,16 @@
             app:layout_constraintHorizontal_weight="0.5" />
 
         <TextView
-            android:id="@+id/updateIntervalLabel"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Update interval (ms):"
-            android:textSize="14sp"
-            app:layout_constraintEnd_toStartOf="@+id/updateIntervalEditText"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/chunkSizeEditText"
-            app:layout_constraintHorizontal_chainStyle="spread_inside"
-            app:layout_constraintHorizontal_weight="1" />
-
-        <EditText
-            android:id="@+id/updateIntervalEditText"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="3000"
-            android:inputType="number"
-            android:textSize="14sp"
-            android:gravity="center"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toEndOf="@+id/updateIntervalLabel"
-            app:layout_constraintTop_toTopOf="@+id/updateIntervalLabel"
-            app:layout_constraintBottom_toBottomOf="@+id/updateIntervalLabel"
-            app:layout_constraintHorizontal_weight="0.5" />
-
-        <TextView
             android:id="@+id/teleprompterHintText"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Controls how text scrolls on glasses (chunk size: characters shown at once, interval: time between updates)"
+            android:text="Chunk size controls how many characters are shown before clearing the display"
             android:textSize="12sp"
             android:textColor="@android:color/darker_gray"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/updateIntervalEditText" />
+            app:layout_constraintTop_toBottomOf="@+id/chunkSizeEditText" />
 
         <!-- Predefined Instructions Section -->
         <TextView

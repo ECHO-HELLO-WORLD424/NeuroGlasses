@@ -44,7 +44,6 @@ class AITestActivity : AppCompatActivity() {
     private lateinit var useAsrCheckBox: CheckBox
     private lateinit var useTtsCheckBox: CheckBox
     private lateinit var chunkSizeEditText: EditText
-    private lateinit var updateIntervalEditText: EditText
     private lateinit var newInstructionEditText: EditText
     private lateinit var addInstructionButton: Button
     private lateinit var instructionsListView: ListView
@@ -67,6 +66,11 @@ class AITestActivity : AppCompatActivity() {
     private var capturedImage: Bitmap? = null
     private var recordedAudioFile: File? = null
     private var lastResultText: String? = null
+
+    // Streaming state
+    private var streamingBuffer = StringBuilder()
+    private var currentDisplayedCharCount = 0
+    private var isStreaming = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,7 +98,6 @@ class AITestActivity : AppCompatActivity() {
         useAsrCheckBox = findViewById(R.id.useAsrCheckBox)
         useTtsCheckBox = findViewById(R.id.useTtsCheckBox)
         chunkSizeEditText = findViewById(R.id.chunkSizeEditText)
-        updateIntervalEditText = findViewById(R.id.updateIntervalEditText)
         newInstructionEditText = findViewById(R.id.newInstructionEditText)
         addInstructionButton = findViewById(R.id.addInstructionButton)
         instructionsListView = findViewById(R.id.instructionsListView)
@@ -197,7 +200,7 @@ class AITestActivity : AppCompatActivity() {
                 runOnUiThread {
                     updateProcessingStatus("ASR result: $text")
                     Log.i(appTag, "ASR completed: $text")
-                    // Call OpenAI with ASR text
+                    // Call OpenAI with ASR text (using streaming)
                     sendToOpenAI(text)
                 }
             }
@@ -210,6 +213,57 @@ class AITestActivity : AppCompatActivity() {
                 }
             }
 
+            override fun onOpenAIStreamingStarted() {
+                runOnUiThread {
+                    updateProcessingStatus("Streaming started...")
+                    Log.i(appTag, "OpenAI streaming started")
+                    isStreaming = true
+                    streamingBuffer.clear()
+                    currentDisplayedCharCount = 0
+
+                    // Open the custom view to prepare for streaming display
+                    customSceneHelper.displayTextResult("")
+                }
+            }
+
+            override fun onOpenAIStreamingChunk(chunk: String, isComplete: Boolean) {
+                runOnUiThread {
+                    if (chunk.isNotEmpty()) {
+                        // Add chunk to buffer
+                        streamingBuffer.append(chunk)
+                        currentDisplayedCharCount += chunk.length
+
+                        Log.d(appTag, "Received chunk: '$chunk' (${chunk.length} chars, total: $currentDisplayedCharCount)")
+
+                        // Get the configured chunk size from UI
+                        val maxCharsPerDisplay = chunkSizeEditText.text.toString().toIntOrNull() ?: 100
+                        val validatedMaxChars = if (maxCharsPerDisplay > 0) maxCharsPerDisplay else 100
+
+                        // Check if we need to clear the display
+                        if (currentDisplayedCharCount >= validatedMaxChars) {
+                            Log.i(appTag, "Char limit reached ($currentDisplayedCharCount >= $validatedMaxChars), clearing display")
+                            // Clear the display and reset counter
+                            customSceneHelper.updateTextResult("")
+                            // Clear the buffer and reset counter
+                            streamingBuffer.clear()
+                            streamingBuffer.append(chunk)
+                            currentDisplayedCharCount = chunk.length
+                            // Update with just the new chunk
+                            customSceneHelper.updateTextResult(chunk)
+                        } else {
+                            // Update the display with accumulated text
+                            customSceneHelper.updateTextResult(streamingBuffer.toString())
+                        }
+                    }
+
+                    if (isComplete) {
+                        Log.i(appTag, "Streaming completed")
+                        isStreaming = false
+                        updateProcessingStatus("Streaming completed")
+                    }
+                }
+            }
+
             override fun onOpenAIResponse(response: String) {
                 runOnUiThread {
                     updateProcessingStatus("AI response received")
@@ -218,17 +272,12 @@ class AITestActivity : AppCompatActivity() {
                     // Store the response
                     lastResultText = response
 
-                    // Check if TTS is enabled
-                    if (useTtsCheckBox.isChecked) {
+                    // Check if TTS is enabled and streaming is complete
+                    if (useTtsCheckBox.isChecked && !isStreaming) {
                         // Convert response to speech
                         updateProcessingStatus("Converting to speech...")
                         val audioDir = getExternalFilesDir("tts_audio") ?: filesDir
                         openAIHelper.callTtsAPI(response, audioDir)
-                    } else {
-                        // Skip TTS, just display the text
-                        updateProcessingStatus("Displaying text (TTS disabled)")
-                        Log.i(appTag, "TTS disabled, displaying text only")
-                        displayResultInCustomUI(response)
                     }
                 }
             }
@@ -238,6 +287,7 @@ class AITestActivity : AppCompatActivity() {
                     updateProcessingStatus("OpenAI failed: $error")
                     Toast.makeText(this@AITestActivity, "OpenAI failed: $error", Toast.LENGTH_SHORT).show()
                     Log.e(appTag, "OpenAI failed: $error")
+                    isStreaming = false
                 }
             }
 
@@ -249,8 +299,8 @@ class AITestActivity : AppCompatActivity() {
                     // Set audio file in custom scene helper
                     customSceneHelper.setAudioFile(audioFile)
 
-                    // Get the text response from lastResultText or extract from processing
-                    lastResultText?.let { displayResultInCustomUI(it) }
+                    // Play the audio (the custom scene helper will handle this)
+                    Log.d(appTag, "TTS audio ready for playback")
                 }
             }
 
@@ -259,9 +309,6 @@ class AITestActivity : AppCompatActivity() {
                     updateProcessingStatus("TTS failed: $error")
                     Toast.makeText(this@AITestActivity, "Speech generation failed: $error", Toast.LENGTH_SHORT).show()
                     Log.e(appTag, "TTS failed: $error")
-
-                    // Still display the text result even if TTS fails
-                    lastResultText?.let { displayResultInCustomUI(it) }
                 }
             }
         })
@@ -471,8 +518,8 @@ class AITestActivity : AppCompatActivity() {
         val hasImage = capturedImage != null && includeImageCheckBox.isChecked
         val imageToSend = if (hasImage) capturedImage else null
 
-        // Call OpenAI API using helper
-        openAIHelper.callOpenAI(instruction, imageToSend)
+        // Call OpenAI API using streaming helper
+        openAIHelper.callOpenAIStreaming(instruction, imageToSend)
     }
 
     /**
@@ -487,23 +534,9 @@ class AITestActivity : AppCompatActivity() {
 
         updateProcessingStatus("Displaying result on glasses...")
 
-        // Get teleprompter settings from UI
-        val chunkSize = chunkSizeEditText.text.toString().toIntOrNull() ?: 100
-        val updateInterval = updateIntervalEditText.text.toString().toLongOrNull() ?: 3000L
-
-        // Validate values
-        val validatedChunkSize = if (chunkSize > 0) chunkSize else 100
-        val validatedInterval = if (updateInterval > 0) updateInterval else 3000L
-
-        Log.d(appTag, "Using teleprompter settings: chunkSize=$validatedChunkSize, interval=${validatedInterval}ms")
-
-        // Use CustomSceneHelper to display with scrolling
-        val status = customSceneHelper.displayTextResultWithScroll(
-            resultText = resultText,
-            chunkSize = validatedChunkSize,
-            updateIntervalMs = validatedInterval
-        )
-        Log.d(appTag, "Display status: $status")
+        // Display the full result text directly
+        customSceneHelper.displayTextResult(resultText)
+        Log.d(appTag, "Result displayed on glasses")
     }
 
     /**
