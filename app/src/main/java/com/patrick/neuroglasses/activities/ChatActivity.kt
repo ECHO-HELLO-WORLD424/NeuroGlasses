@@ -83,6 +83,7 @@ class ChatActivity : AppCompatActivity() {
     private var capturedImage: Bitmap? = null
     private var chatHistory = StringBuilder()
     private var streamingBuffer = StringBuilder()
+    private var isCurrentlyStreaming = false
 
     // Permissions
     private val PERMISSION_REQUEST_CODE = 100
@@ -189,19 +190,27 @@ class ChatActivity : AppCompatActivity() {
                 runOnUiThread {
                     Log.i(appTag, "OpenAI streaming started")
                     streamingBuffer.clear()
-                    appendToChat("AI: ")
+                    isCurrentlyStreaming = true
                 }
             }
 
             override fun onOpenAIStreamingChunk(chunk: String, isComplete: Boolean) {
                 runOnUiThread {
-                    if (chunk.isNotEmpty()) {
-                        streamingBuffer.append(chunk)
-                        updateLastLine("AI: $streamingBuffer")
+                    if (!isCurrentlyStreaming) {
+                        Log.w(appTag, "Received chunk but not streaming - ignoring")
+                        return@runOnUiThread
                     }
 
-                    if (isComplete) {
-                        appendToChat("\n")
+                    if (chunk.isNotEmpty()) {
+                        streamingBuffer.append(chunk)
+                        // Update display with current streaming content
+                        chatTextView.text = chatHistory.toString() + "AI: $streamingBuffer"
+                    }
+
+                    if (isComplete && isCurrentlyStreaming) {
+                        // Finalize the AI response in chat history
+                        appendToChat("AI: $streamingBuffer\n")
+                        isCurrentlyStreaming = false
                         Log.i(appTag, "Streaming completed")
                     }
                 }
@@ -509,11 +518,24 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun sendMessage(message: String) {
+        // Clear previous conversation for new request
+        chatHistory.clear()
+        streamingBuffer.clear()
+        isCurrentlyStreaming = false
+
+        // Clear the TextView to ensure clean state
+        chatTextView.text = ""
+
+        // Display new user message
         appendToChat("You: $message\n")
+
+        // Clear previous image for new request
+        capturedImage = null
+        imagePreview.setImageBitmap(null)
 
         // Check if we should include image
         val includeImage = SettingsActivity.getIncludeImage(this)
-        if (includeImage && capturedImage == null) {
+        if (includeImage) {
             takePhoto()
             // Wait a bit for camera, then send
             backgroundHandler?.postDelayed({
@@ -528,6 +550,7 @@ class ChatActivity : AppCompatActivity() {
         val includeImage = SettingsActivity.getIncludeImage(this)
         val imageToSend = if (includeImage) capturedImage else null
 
+        Log.d(appTag, "Sending to OpenAI - instruction: $instruction, hasImage: ${imageToSend != null}")
         openAIHelper.callOpenAIStreaming(instruction, imageToSend)
     }
 
@@ -546,7 +569,14 @@ class ChatActivity : AppCompatActivity() {
         val lines = chatHistory.toString().split("\n").toMutableList()
         if (lines.isNotEmpty()) {
             lines[lines.lastIndex] = text
-            chatTextView.text = lines.joinToString("\n")
+
+            // Update both the display and the history
+            val updatedText = lines.joinToString("\n")
+            chatTextView.text = updatedText
+
+            // Rebuild chatHistory to keep it in sync
+            chatHistory.clear()
+            chatHistory.append(updatedText)
         }
 
         // Scroll to bottom
