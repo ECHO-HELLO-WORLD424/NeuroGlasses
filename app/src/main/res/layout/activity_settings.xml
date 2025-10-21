@@ -4,7 +4,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:background="#000000">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/main"
@@ -17,13 +18,69 @@
             android:id="@+id/titleTextView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="API Configuration"
-            android:textSize="24sp"
+            android:text="Settings"
+            android:textColor="#40FF5E"
+            android:textSize="20sp"
             android:textStyle="bold"
+            android:fontFamily="monospace"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            android:layout_marginTop="16dp" />
+            android:layout_marginTop="8dp" />
+
+        <!-- Feature Toggles Section -->
+        <TextView
+            android:id="@+id/featuresLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Features"
+            android:textColor="#40FF5E"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"
+            android:layout_marginTop="16dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/titleTextView" />
+
+        <CheckBox
+            android:id="@+id/includeImageCheckBox"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Include Image"
+            android:textColor="#40FF5E"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:buttonTint="#40FF5E"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/featuresLabel" />
+
+        <CheckBox
+            android:id="@+id/useAsrCheckBox"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Use ASR (Voice)"
+            android:textColor="#40FF5E"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:buttonTint="#40FF5E"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/includeImageCheckBox" />
+
+        <CheckBox
+            android:id="@+id/useTtsCheckBox"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="Use TTS (Speech)"
+            android:textColor="#40FF5E"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:buttonTint="#40FF5E"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/useAsrCheckBox" />
 
         <!-- API Base URL Section -->
         <TextView
@@ -31,15 +88,21 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="API Base URL"
-            android:textSize="16sp"
+            android:textColor="#40FF5E"
+            android:textSize="12sp"
             android:textStyle="bold"
-            android:layout_marginTop="24dp"
+            android:fontFamily="monospace"
+            android:layout_marginTop="16dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/titleTextView" />
+            app:layout_constraintTop_toBottomOf="@+id/useTtsCheckBox" />
 
         <EditText
             android:id="@+id/apiBaseUrlEditText"
+            android:textColor="#40FF5E"
+            android:textColorHint="#2A8040"
+            android:fontFamily="monospace"
+            android:background="@android:color/transparent"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:hint="https://api.example.com/v1"
@@ -55,7 +118,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="API Token"
-            android:textSize="16sp"
+            android:textSize="12sp"
+            android:textColor="#40FF5E"
+            android:fontFamily="monospace"
             android:textStyle="bold"
             android:layout_marginTop="16dp"
             app:layout_constraintEnd_toEndOf="parent"
@@ -64,6 +129,10 @@
 
         <EditText
             android:id="@+id/apiTokenEditText"
+            android:textColor="#40FF5E"
+            android:textColorHint="#2A8040"
+            android:fontFamily="monospace"
+            android:background="@android:color/transparent"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:hint="Enter your API token"
@@ -79,7 +148,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="API Timeout (seconds)"
-            android:textSize="16sp"
+            android:textSize="12sp"
+            android:textColor="#40FF5E"
+            android:fontFamily="monospace"
             android:textStyle="bold"
             android:layout_marginTop="16dp"
             app:layout_constraintEnd_toEndOf="parent"
@@ -88,6 +159,10 @@
 
         <EditText
             android:id="@+id/apiTimeoutEditText"
+            android:textColor="#40FF5E"
+            android:textColorHint="#2A8040"
+            android:fontFamily="monospace"
+            android:background="@android:color/transparent"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:hint="15"
@@ -103,7 +178,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="System Prompt"
-            android:textSize="16sp"
+            android:textSize="12sp"
+            android:textColor="#40FF5E"
+            android:fontFamily="monospace"
             android:textStyle="bold"
             android:layout_marginTop="16dp"
             app:layout_constraintEnd_toEndOf="parent"
@@ -112,6 +189,10 @@
 
         <EditText
             android:id="@+id/systemPromptEditText"
+            android:textColor="#40FF5E"
+            android:textColorHint="#2A8040"
+            android:fontFamily="monospace"
+            android:background="@android:color/transparent"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:hint="System prompt for AI assistant"
@@ -129,7 +210,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="VLM Model"
-            android:textSize="16sp"
+            android:textSize="12sp"
+            android:textColor="#40FF5E"
+            android:fontFamily="monospace"
             android:textStyle="bold"
             android:layout_marginTop="16dp"
             app:layout_constraintEnd_toEndOf="parent"
@@ -138,6 +221,10 @@
 
         <EditText
             android:id="@+id/vlmModelEditText"
+            android:textColor="#40FF5E"
+            android:textColorHint="#2A8040"
+            android:fontFamily="monospace"
+            android:background="@android:color/transparent"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:hint="Model name for vision language"
@@ -153,7 +240,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="VLM Max Tokens"
-            android:textSize="16sp"
+            android:textSize="12sp"
+            android:textColor="#40FF5E"
+            android:fontFamily="monospace"
             android:textStyle="bold"
             android:layout_marginTop="16dp"
             app:layout_constraintEnd_toEndOf="parent"
@@ -162,6 +251,10 @@
 
         <EditText
             android:id="@+id/vlmMaxTokensEditText"
+            android:textColor="#40FF5E"
+            android:textColorHint="#2A8040"
+            android:fontFamily="monospace"
+            android:background="@android:color/transparent"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:hint="1024"
@@ -177,7 +270,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="ASR Model"
-            android:textSize="16sp"
+            android:textSize="12sp"
+            android:textColor="#40FF5E"
+            android:fontFamily="monospace"
             android:textStyle="bold"
             android:layout_marginTop="16dp"
             app:layout_constraintEnd_toEndOf="parent"
@@ -186,6 +281,10 @@
 
         <EditText
             android:id="@+id/asrModelEditText"
+            android:textColor="#40FF5E"
+            android:textColorHint="#2A8040"
+            android:fontFamily="monospace"
+            android:background="@android:color/transparent"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:hint="Model name for speech recognition"
@@ -201,7 +300,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="TTS Model"
-            android:textSize="16sp"
+            android:textSize="12sp"
+            android:textColor="#40FF5E"
+            android:fontFamily="monospace"
             android:textStyle="bold"
             android:layout_marginTop="16dp"
             app:layout_constraintEnd_toEndOf="parent"
@@ -210,6 +311,10 @@
 
         <EditText
             android:id="@+id/ttsModelEditText"
+            android:textColor="#40FF5E"
+            android:textColorHint="#2A8040"
+            android:fontFamily="monospace"
+            android:background="@android:color/transparent"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:hint="Model name for text-to-speech"
@@ -225,7 +330,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="TTS Voice"
-            android:textSize="16sp"
+            android:textSize="12sp"
+            android:textColor="#40FF5E"
+            android:fontFamily="monospace"
             android:textStyle="bold"
             android:layout_marginTop="16dp"
             app:layout_constraintEnd_toEndOf="parent"
@@ -234,6 +341,10 @@
 
         <EditText
             android:id="@+id/ttsVoiceEditText"
+            android:textColor="#40FF5E"
+            android:textColorHint="#2A8040"
+            android:fontFamily="monospace"
+            android:background="@android:color/transparent"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:hint="Voice ID for TTS"
@@ -249,7 +360,10 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="Save Settings"
-            android:textSize="16sp"
+            android:backgroundTint="#40FF5E"
+            android:textColor="#000000"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
             android:layout_marginTop="24dp"
             android:layout_marginEnd="8dp"
             app:layout_constraintEnd_toStartOf="@+id/resetButton"
@@ -261,7 +375,10 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="Reset to Defaults"
-            android:textSize="16sp"
+            android:backgroundTint="#40FF5E"
+            android:textColor="#000000"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
             android:layout_marginTop="24dp"
             android:layout_marginStart="8dp"
             app:layout_constraintEnd_toEndOf="parent"

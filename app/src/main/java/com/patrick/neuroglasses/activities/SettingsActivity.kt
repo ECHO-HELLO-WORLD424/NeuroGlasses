@@ -3,14 +3,21 @@ package com.patrick.neuroglasses.activities
 import android.content.Context
 import android.os.Bundle
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.patrick.neuroglasses.R
 
 class SettingsActivity : AppCompatActivity() {
 
     // UI Components
+    private lateinit var includeImageCheckBox: CheckBox
+    private lateinit var useAsrCheckBox: CheckBox
+    private lateinit var useTtsCheckBox: CheckBox
     private lateinit var apiBaseUrlEditText: EditText
     private lateinit var apiTokenEditText: EditText
     private lateinit var apiTimeoutEditText: EditText
@@ -26,6 +33,9 @@ class SettingsActivity : AppCompatActivity() {
     companion object {
         // SharedPreferences keys
         const val PREFS_NAME = "OpenAISettings"
+        const val KEY_INCLUDE_IMAGE = "include_image"
+        const val KEY_USE_ASR = "use_asr"
+        const val KEY_USE_TTS = "use_tts"
         const val KEY_API_BASE_URL = "api_base_url"
         const val KEY_API_TOKEN = "api_token"
         const val KEY_API_TIMEOUT = "api_timeout"
@@ -37,6 +47,9 @@ class SettingsActivity : AppCompatActivity() {
         const val KEY_TTS_VOICE = "tts_voice"
 
         // Default values
+        const val DEFAULT_INCLUDE_IMAGE = true
+        const val DEFAULT_USE_ASR = false
+        const val DEFAULT_USE_TTS = true
         const val DEFAULT_API_BASE_URL = "https://api.siliconflow.cn/v1"
         const val DEFAULT_API_TOKEN = ""
         const val DEFAULT_API_TIMEOUT = 15
@@ -48,6 +61,21 @@ class SettingsActivity : AppCompatActivity() {
         const val DEFAULT_TTS_VOICE = "speech:CozyNeuro:d1jud8rk20jc738kdhng:awfuidogpvwibtwohfca"
 
         // Helper functions to get configuration values
+        fun getIncludeImage(context: Context): Boolean {
+            val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            return prefs.getBoolean(KEY_INCLUDE_IMAGE, DEFAULT_INCLUDE_IMAGE)
+        }
+
+        fun getUseAsr(context: Context): Boolean {
+            val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            return prefs.getBoolean(KEY_USE_ASR, DEFAULT_USE_ASR)
+        }
+
+        fun getUseTts(context: Context): Boolean {
+            val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            return prefs.getBoolean(KEY_USE_TTS, DEFAULT_USE_TTS)
+        }
+
         fun getApiBaseUrl(context: Context): String {
             val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             return prefs.getString(KEY_API_BASE_URL, DEFAULT_API_BASE_URL) ?: DEFAULT_API_BASE_URL
@@ -96,9 +124,16 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Enable fullscreen immersive mode for AR glasses
+        enableFullscreenMode()
+
         setContentView(R.layout.activity_settings)
 
         // Initialize UI components
+        includeImageCheckBox = findViewById(R.id.includeImageCheckBox)
+        useAsrCheckBox = findViewById(R.id.useAsrCheckBox)
+        useTtsCheckBox = findViewById(R.id.useTtsCheckBox)
         apiBaseUrlEditText = findViewById(R.id.apiBaseUrlEditText)
         apiTokenEditText = findViewById(R.id.apiTokenEditText)
         apiTimeoutEditText = findViewById(R.id.apiTimeoutEditText)
@@ -127,6 +162,9 @@ class SettingsActivity : AppCompatActivity() {
     private fun loadSettings() {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
 
+        includeImageCheckBox.isChecked = prefs.getBoolean(KEY_INCLUDE_IMAGE, DEFAULT_INCLUDE_IMAGE)
+        useAsrCheckBox.isChecked = prefs.getBoolean(KEY_USE_ASR, DEFAULT_USE_ASR)
+        useTtsCheckBox.isChecked = prefs.getBoolean(KEY_USE_TTS, DEFAULT_USE_TTS)
         apiBaseUrlEditText.setText(prefs.getString(KEY_API_BASE_URL, DEFAULT_API_BASE_URL))
         apiTokenEditText.setText(prefs.getString(KEY_API_TOKEN, DEFAULT_API_TOKEN))
         apiTimeoutEditText.setText(prefs.getInt(KEY_API_TIMEOUT, DEFAULT_API_TIMEOUT).toString())
@@ -142,6 +180,11 @@ class SettingsActivity : AppCompatActivity() {
         try {
             val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             val editor = prefs.edit()
+
+            // Save feature toggles
+            editor.putBoolean(KEY_INCLUDE_IMAGE, includeImageCheckBox.isChecked)
+            editor.putBoolean(KEY_USE_ASR, useAsrCheckBox.isChecked)
+            editor.putBoolean(KEY_USE_TTS, useTtsCheckBox.isChecked)
 
             // Validate and save API base URL
             val apiBaseUrl = apiBaseUrlEditText.text.toString().trim()
@@ -224,6 +267,9 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun resetToDefaults() {
+        includeImageCheckBox.isChecked = DEFAULT_INCLUDE_IMAGE
+        useAsrCheckBox.isChecked = DEFAULT_USE_ASR
+        useTtsCheckBox.isChecked = DEFAULT_USE_TTS
         apiBaseUrlEditText.setText(DEFAULT_API_BASE_URL)
         apiTokenEditText.setText(DEFAULT_API_TOKEN)
         apiTimeoutEditText.setText(DEFAULT_API_TIMEOUT.toString())
@@ -235,5 +281,25 @@ class SettingsActivity : AppCompatActivity() {
         ttsVoiceEditText.setText(DEFAULT_TTS_VOICE)
 
         Toast.makeText(this, "Reset to default values", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun enableFullscreenMode() {
+        actionBar?.hide()
+        supportActionBar?.hide()
+
+        // Use WindowCompat for modern fullscreen (API 30+)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.apply {
+            hide(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            enableFullscreenMode()
+        }
     }
 }

@@ -81,4 +81,13 @@
     <string name="sync_permission_required">Storage permission required to save photos</string>
     <string name="toast_sync_success">Photo downloaded to: %s</string>
     <string name="toast_sync_failed">Failed to sync photo</string>
+
+    <!-- Chat Activity -->
+    <string name="camera_preview">Camera preview</string>
+    <string name="ready_to_chat">Ready to chat. Press send or use voice input.</string>
+    <string name="enter_message">Enter message…</string>
+    <string name="send">Send</string>
+    <string name="recording_audio">Recording audio…</string>
+    <string name="processing_request">Processing…</string>
+    <string name="ai_response">AI: %s</string>
 </resources>
