@@ -238,8 +238,8 @@ class AITestActivity : AppCompatActivity() {
                         Log.d(appTag, "Received chunk: '$chunk' (${chunk.length} chars, total: $currentDisplayedCharCount)")
 
                         // Get the configured chunk size from UI
-                        val maxCharsPerDisplay = chunkSizeEditText.text.toString().toIntOrNull() ?: 100
-                        val validatedMaxChars = if (maxCharsPerDisplay > 0) maxCharsPerDisplay else 100
+                        val maxCharsPerDisplay = chunkSizeEditText.text.toString().toIntOrNull() ?: 350
+                        val validatedMaxChars = if (maxCharsPerDisplay > 0) maxCharsPerDisplay else 350
 
                         // Check if we need to clear the display
                         if (currentDisplayedCharCount >= validatedMaxChars) {
