@@ -16,7 +16,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Top Input Container with Settings Button and Input Field -->
+    <!-- Top Input Container with Recording Button, Input Field, and Settings Button -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/inputContainer"
         android:layout_width="0dp"
@@ -27,7 +27,51 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Small Circular Settings Button (Hollow) -->
+        <!-- Small Circular Recording Button (Hollow) on the left -->
+        <Button
+            android:id="@+id/recordButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:text="🎤"
+            android:textColor="#40FF5E"
+            android:background="@drawable/button_hollow_circle"
+            android:fontFamily="monospace"
+            android:textSize="16sp"
+            android:padding="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
+
+        <!-- Input Field in the middle -->
+        <EditText
+            android:id="@+id/inputEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:hint="@string/enter_message"
+            android:textColor="#40FF5E"
+            android:textColorHint="#2A8040"
+            android:background="@android:color/transparent"
+            android:padding="8dp"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:inputType="text"
+            android:imeOptions="actionSend"
+            android:importantForAutofill="no"
+            android:maxLines="2"
+            app:layout_constraintStart_toEndOf="@id/recordButton"
+            app:layout_constraintEnd_toStartOf="@id/settingsButton"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp" />
+
+        <!-- Small Circular Settings Button (Hollow) on the right -->
         <Button
             android:id="@+id/settingsButton"
             android:layout_width="40dp"
@@ -44,31 +88,9 @@
             android:insetRight="0dp"
             android:minWidth="0dp"
             android:minHeight="0dp"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent" />
-
-        <!-- Input Field -->
-        <EditText
-            android:id="@+id/inputEditText"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:hint="@string/enter_message"
-            android:textColor="#40FF5E"
-            android:textColorHint="#2A8040"
-            android:background="@android:color/transparent"
-            android:padding="8dp"
-            android:fontFamily="monospace"
-            android:textSize="12sp"
-            android:inputType="text"
-            android:imeOptions="actionSend"
-            android:importantForAutofill="no"
-            android:maxLines="2"
-            app:layout_constraintStart_toEndOf="@id/settingsButton"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            android:layout_marginStart="8dp" />
+            app:layout_constraintBottom_toBottomOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

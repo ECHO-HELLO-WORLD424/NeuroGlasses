@@ -709,11 +709,11 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
      * Custom DNS implementation with fallback DNS servers
      * Helps resolve connectivity issues when default DNS fails
      */
-    private inner class CustomDns : okhttp3.Dns {
+    private inner class CustomDns : Dns {
         override fun lookup(hostname: String): List<java.net.InetAddress> {
             try {
                 // First try system DNS
-                return okhttp3.Dns.SYSTEM.lookup(hostname)
+                return Dns.SYSTEM.lookup(hostname)
             } catch (e: Exception) {
                 Log.w(appTag, "System DNS failed for $hostname, trying fallback DNS: ${e.message}")
 

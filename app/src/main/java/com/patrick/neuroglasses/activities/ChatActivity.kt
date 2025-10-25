@@ -12,9 +12,6 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.widget.Button
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.ScrollView
@@ -60,6 +57,8 @@ class ChatActivity : AppCompatActivity() {
     private lateinit var chatTextView: TextView
     private lateinit var inputEditText: EditText
     private lateinit var sendButton: Button
+    private lateinit var recordButton: Button
+    private lateinit var settingsButton: Button
 
     // Helpers
     private lateinit var openAIHelper: OpenAIHelper
@@ -78,6 +77,8 @@ class ChatActivity : AppCompatActivity() {
     private var isRecording = false
     private val audioBuffer = ByteArrayOutputStream()
     private var recordingThread: Thread? = null
+    private var asrRecordingTimer: Thread? = null
+    private var currentAsrAudioFile: File? = null
 
     // State
     private var capturedImage: Bitmap? = null
@@ -114,19 +115,6 @@ class ChatActivity : AppCompatActivity() {
         setupCamera()
     }
 
-    private fun enableFullscreenMode() {
-        actionBar?.hide()
-        supportActionBar?.hide()
-
-        // Use WindowCompat for modern fullscreen (API 30+)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.apply {
-            hide(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
-    }
-
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         // Disabled: Full screen mode doesn't align with glasses orientation
@@ -135,13 +123,104 @@ class ChatActivity : AppCompatActivity() {
         // }
     }
 
+    private fun handleRecordButtonClick() {
+        // Check if ASR is enabled in settings
+        val useAsr = SettingsActivity.getUseAsr(this)
+        if (!useAsr) {
+            Toast.makeText(this, "ASR is disabled. Enable it in settings.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Don't trigger if already recording
+        if (isRecording) {
+            Toast.makeText(this, "Already recording...", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Start ASR recording
+        triggerAsrRecording()
+    }
+
+    private fun cleanupAsrAudioFile() {
+        currentAsrAudioFile?.let { file ->
+            try {
+                if (file.exists()) {
+                    val deleted = file.delete()
+                    if (deleted) {
+                        Log.d(appTag, "Deleted ASR audio file: ${file.absolutePath}")
+                    } else {
+                        Log.w(appTag, "Failed to delete ASR audio file: ${file.absolutePath}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(appTag, "Error deleting ASR audio file: ${e.message}", e)
+            } finally {
+                currentAsrAudioFile = null
+            }
+        }
+    }
+
+    private fun triggerAsrRecording() {
+        Log.i(appTag, "ASR triggered! Starting 4-second recording...")
+        appendToChat("🎤 Recording for 4 seconds...\n")
+
+        // Update button appearance
+        recordButton.isEnabled = false
+        recordButton.alpha = 0.5f
+
+        startAudioRecording()
+
+        // Stop recording after 4 seconds
+        asrRecordingTimer = Thread {
+            try {
+                Thread.sleep(4000)
+                runOnUiThread {
+                    val audioFile = stopAudioRecording()
+
+                    // Re-enable button
+                    recordButton.isEnabled = true
+                    recordButton.alpha = 1.0f
+
+                    if (audioFile != null) {
+                        Log.i(appTag, "Recording complete, sending to ASR API: ${audioFile.absolutePath}")
+                        appendToChat("Processing speech...\n")
+
+                        // Track the file for cleanup after API call
+                        currentAsrAudioFile = audioFile
+                        openAIHelper.callAsrAPI(audioFile)
+                    } else {
+                        Log.e(appTag, "Recording failed - no audio data")
+                        appendToChat("Recording failed\n")
+                    }
+                }
+            } catch (e: InterruptedException) {
+                Log.d(appTag, "ASR recording timer interrupted")
+                runOnUiThread {
+                    if (isRecording) {
+                        stopAudioRecording()
+                    }
+                    // Re-enable button
+                    recordButton.isEnabled = true
+                    recordButton.alpha = 1.0f
+                }
+            }
+        }
+        asrRecordingTimer?.start()
+    }
+
     private fun initializeViews() {
         imagePreview = findViewById(R.id.imagePreview)
         chatScrollView = findViewById(R.id.chatScrollView)
         chatTextView = findViewById(R.id.chatTextView)
         inputEditText = findViewById(R.id.inputEditText)
         sendButton = findViewById(R.id.sendButton)
-        val settingsButton: Button = findViewById(R.id.settingsButton)
+        recordButton = findViewById(R.id.recordButton)
+        settingsButton = findViewById(R.id.settingsButton)
+
+        // Recording button click listener
+        recordButton.setOnClickListener {
+            handleRecordButtonClick()
+        }
 
         // Settings button click listener
         settingsButton.setOnClickListener {
@@ -184,9 +263,14 @@ class ChatActivity : AppCompatActivity() {
         openAIHelper.setListener(object : OpenAIHelper.OpenAIListener {
             override fun onAsrComplete(text: String) {
                 runOnUiThread {
-                    appendToChat("You (voice): $text\n")
                     Log.i(appTag, "ASR completed: $text")
-                    sendToOpenAI(text)
+                    appendToChat("✓ Speech recognized: $text\n")
+                    // Put recognized text in input field
+                    inputEditText.setText(text)
+                    Toast.makeText(this@ChatActivity, "Speech recognized", Toast.LENGTH_SHORT).show()
+
+                    // Clean up audio file immediately after ASR completes
+                    cleanupAsrAudioFile()
                 }
             }
 
@@ -195,6 +279,9 @@ class ChatActivity : AppCompatActivity() {
                     appendToChat("ASR Error: $error\n")
                     Toast.makeText(this@ChatActivity, "ASR failed: $error", Toast.LENGTH_SHORT).show()
                     Log.e(appTag, "ASR failed: $error")
+
+                    // Clean up audio file even on failure
+                    cleanupAsrAudioFile()
                 }
             }
 
@@ -605,27 +692,6 @@ class ChatActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateLastLine(text: String) {
-        // Update the last line (for streaming)
-        val lines = chatHistory.toString().split("\n").toMutableList()
-        if (lines.isNotEmpty()) {
-            lines[lines.lastIndex] = text
-
-            // Update both the display and the history
-            val updatedText = lines.joinToString("\n")
-            chatTextView.text = updatedText
-
-            // Rebuild chatHistory to keep it in sync
-            chatHistory.clear()
-            chatHistory.append(updatedText)
-        }
-
-        // Scroll to bottom
-        chatScrollView.post {
-            chatScrollView.fullScroll(View.FOCUS_DOWN)
-        }
-    }
-
     override fun onResume() {
         super.onResume()
 
@@ -657,6 +723,10 @@ class ChatActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        // Stop ASR recording timer if active
+        asrRecordingTimer?.interrupt()
+        asrRecordingTimer = null
 
         // Stop background thread
         backgroundThread?.quitSafely()
