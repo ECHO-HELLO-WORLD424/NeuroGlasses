@@ -5,75 +5,50 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- Camera Preview ImageView at the top (25% of screen) -->
+    <!-- Hidden Camera Preview ImageView (still needed by code but invisible) -->
     <ImageView
         android:id="@+id/imagePreview"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:scaleType="fitCenter"
-        android:background="#000000"
+        android:visibility="gone"
         android:contentDescription="@string/camera_preview"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/chatScrollView"
-        app:layout_constraintVertical_weight="1" />
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- ScrollView for chat messages (50% of screen) -->
-    <ScrollView
-        android:id="@+id/chatScrollView"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:scrollbars="vertical"
-        android:padding="8dp"
-        app:layout_constraintTop_toBottomOf="@id/imagePreview"
-        app:layout_constraintBottom_toTopOf="@id/buttonContainer"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintVertical_weight="2">
-
-        <TextView
-            android:id="@+id/chatTextView"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="#40FF5E"
-            android:textSize="12sp"
-            android:fontFamily="monospace"
-            android:text="@string/ready_to_chat" />
-    </ScrollView>
-
-    <!-- Button Container at bottom (25% of screen) -->
+    <!-- Top Input Container with Settings Button and Input Field -->
     <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/buttonContainer"
+        android:id="@+id/inputContainer"
         android:layout_width="0dp"
-        android:layout_height="0dp"
+        android:layout_height="wrap_content"
         android:background="#000000"
         android:padding="8dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/chatScrollView"
-        app:layout_constraintVertical_weight="1">
+        app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Settings Button (Left position, bias 0.068) -->
+        <!-- Small Circular Settings Button (Hollow) -->
         <Button
             android:id="@+id/settingsButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:text="⚙"
-            android:textColor="#000000"
-            android:backgroundTint="#40FF5E"
+            android:textColor="#40FF5E"
+            android:background="@drawable/button_hollow_circle"
             android:fontFamily="monospace"
-            android:minWidth="60dp"
             android:textSize="16sp"
+            android:padding="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintHorizontal_bias="0.068"
-            app:layout_constraintVertical_bias="0.5" />
+            app:layout_constraintBottom_toBottomOf="parent" />
 
-        <!-- Input Field (Center-right area) -->
+        <!-- Input Field -->
         <EditText
             android:id="@+id/inputEditText"
             android:layout_width="0dp"
@@ -86,33 +61,58 @@
             android:fontFamily="monospace"
             android:textSize="12sp"
             android:inputType="text"
+            android:imeOptions="actionSend"
             android:importantForAutofill="no"
             android:maxLines="2"
             app:layout_constraintStart_toEndOf="@id/settingsButton"
-            app:layout_constraintEnd_toStartOf="@id/sendButton"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp" />
-
-        <!-- Send Button (Right position, bias 0.931) -->
-        <Button
-            android:id="@+id/sendButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/send"
-            android:textColor="#000000"
-            android:backgroundTint="#40FF5E"
-            android:fontFamily="monospace"
-            android:minWidth="80dp"
-            android:textSize="14sp"
-            app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintHorizontal_bias="0.931"
-            app:layout_constraintVertical_bias="0.5" />
+            android:layout_marginStart="8dp" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Spacer View (middle area, empty to not block eyesight) -->
+    <View
+        android:id="@+id/spacer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toBottomOf="@id/inputContainer"
+        app:layout_constraintBottom_toTopOf="@id/chatScrollView"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintVertical_weight="2" />
+
+    <!-- ScrollView for chat messages at bottom -->
+    <ScrollView
+        android:id="@+id/chatScrollView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:scrollbars="vertical"
+        android:padding="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/spacer"
+        app:layout_constraintVertical_weight="1">
+
+        <TextView
+            android:id="@+id/chatTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#40FF5E"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
+            android:text="@string/ready_to_chat" />
+    </ScrollView>
+
+    <!-- Hidden send button (still needed by code but invisible) -->
+    <Button
+        android:id="@+id/sendButton"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

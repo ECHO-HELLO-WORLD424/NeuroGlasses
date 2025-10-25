@@ -96,7 +96,8 @@ class ChatActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         // Enable fullscreen immersive mode for AR glasses
-        enableFullscreenMode()
+        // Disabled: Full screen mode doesn't align with glasses orientation
+        // enableFullscreenMode()
 
         setContentView(R.layout.activity_chat)
 
@@ -128,9 +129,10 @@ class ChatActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            enableFullscreenMode()
-        }
+        // Disabled: Full screen mode doesn't align with glasses orientation
+        // if (hasFocus) {
+        //     enableFullscreenMode()
+        // }
     }
 
     private fun initializeViews() {
@@ -158,6 +160,16 @@ class ChatActivity : AppCompatActivity() {
         // Handle Enter key to send message
         inputEditText.setOnKeyListener { _, keyCode, event ->
             if (keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN) {
+                sendButton.performClick()
+                true
+            } else {
+                false
+            }
+        }
+
+        // Handle IME action (for virtual keyboards with Send action)
+        inputEditText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
                 sendButton.performClick()
                 true
             } else {

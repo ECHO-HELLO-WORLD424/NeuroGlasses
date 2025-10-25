@@ -126,7 +126,8 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         // Enable fullscreen immersive mode for AR glasses
-        enableFullscreenMode()
+        // Disabled: Full screen mode doesn't align with glasses orientation
+        // enableFullscreenMode()
 
         setContentView(R.layout.activity_settings)
 
@@ -298,8 +299,9 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            enableFullscreenMode()
-        }
+        // Disabled: Full screen mode doesn't align with glasses orientation
+        // if (hasFocus) {
+        //     enableFullscreenMode()
+        // }
     }
 }
