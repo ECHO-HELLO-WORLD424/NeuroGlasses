@@ -3,10 +3,6 @@ package com.patrick.neuroglasses.activities
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
@@ -18,23 +14,15 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.patrick.neuroglasses.R
 import com.patrick.neuroglasses.helpers.OpenAIHelper
 import com.patrick.neuroglasses.helpers.StreamingAudioPlayer
+import com.patrick.neuroglasses.helpers.CameraHelper
+import com.patrick.neuroglasses.helpers.AudioRecordingHelper
 import java.io.File
-import java.io.FileOutputStream
-import java.io.ByteArrayOutputStream
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import android.hardware.camera2.*
-import android.graphics.ImageFormat
-import android.hardware.camera2.params.OutputConfiguration
-import android.hardware.camera2.params.SessionConfiguration
-import android.media.ImageReader
-import android.os.Handler
-import android.os.HandlerThread
 
 /**
  * Chat Activity for native AR Glasses
@@ -63,22 +51,8 @@ class ChatActivity : AppCompatActivity() {
     // Helpers
     private lateinit var openAIHelper: OpenAIHelper
     private lateinit var streamingAudioPlayer: StreamingAudioPlayer
-
-    // Camera
-    private var cameraManager: CameraManager? = null
-    private var cameraDevice: CameraDevice? = null
-    private var cameraCaptureSession: CameraCaptureSession? = null
-    private var imageReader: ImageReader? = null
-    private var backgroundThread: HandlerThread? = null
-    private var backgroundHandler: Handler? = null
-
-    // Audio Recording
-    private var audioRecord: AudioRecord? = null
-    private var isRecording = false
-    private val audioBuffer = ByteArrayOutputStream()
-    private var recordingThread: Thread? = null
-    private var asrRecordingTimer: Thread? = null
-    private var currentAsrAudioFile: File? = null
+    private lateinit var cameraHelper: CameraHelper
+    private lateinit var audioRecordingHelper: AudioRecordingHelper
 
     // State
     private var capturedImage: Bitmap? = null
@@ -111,8 +85,13 @@ class ChatActivity : AppCompatActivity() {
         // Request permissions
         checkPermissions()
 
-        // Setup camera
-        setupCamera()
+        // Setup back button handler for proper exit on AR glasses
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                Log.i(appTag, "Back pressed - cleaning up and exiting app")
+                cleanupAndExit()
+            }
+        })
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -132,7 +111,7 @@ class ChatActivity : AppCompatActivity() {
         }
 
         // Don't trigger if already recording
-        if (isRecording) {
+        if (audioRecordingHelper.isRecording()) {
             Toast.makeText(this, "Already recording...", Toast.LENGTH_SHORT).show()
             return
         }
@@ -141,22 +120,34 @@ class ChatActivity : AppCompatActivity() {
         triggerAsrRecording()
     }
 
-    private fun cleanupAsrAudioFile() {
-        currentAsrAudioFile?.let { file ->
-            try {
-                if (file.exists()) {
-                    val deleted = file.delete()
-                    if (deleted) {
-                        Log.d(appTag, "Deleted ASR audio file: ${file.absolutePath}")
-                    } else {
-                        Log.w(appTag, "Failed to delete ASR audio file: ${file.absolutePath}")
+
+    private fun cleanupTempFiles() {
+        try {
+            // Clean up ASR audio recordings
+            val audioDir = getExternalFilesDir("audio_recordings")
+            audioDir?.listFiles()?.forEach { file ->
+                try {
+                    if (file.delete()) {
+                        Log.d(appTag, "Deleted temp audio file: ${file.name}")
                     }
+                } catch (e: Exception) {
+                    Log.e(appTag, "Error deleting audio file: ${file.name}", e)
                 }
-            } catch (e: Exception) {
-                Log.e(appTag, "Error deleting ASR audio file: ${e.message}", e)
-            } finally {
-                currentAsrAudioFile = null
             }
+
+            // Clean up TTS audio files
+            val ttsDir = getExternalFilesDir("tts_audio")
+            ttsDir?.listFiles()?.forEach { file ->
+                try {
+                    if (file.delete()) {
+                        Log.d(appTag, "Deleted TTS file: ${file.name}")
+                    }
+                } catch (e: Exception) {
+                    Log.e(appTag, "Error deleting TTS file: ${file.name}", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(appTag, "Error during temp files cleanup: ${e.message}", e)
         }
     }
 
@@ -168,44 +159,22 @@ class ChatActivity : AppCompatActivity() {
         recordButton.isEnabled = false
         recordButton.alpha = 0.5f
 
-        startAudioRecording()
+        audioRecordingHelper.startAsrRecording { audioFile ->
+            runOnUiThread {
+                // Re-enable button
+                recordButton.isEnabled = true
+                recordButton.alpha = 1.0f
 
-        // Stop recording after 4 seconds
-        asrRecordingTimer = Thread {
-            try {
-                Thread.sleep(4000)
-                runOnUiThread {
-                    val audioFile = stopAudioRecording()
-
-                    // Re-enable button
-                    recordButton.isEnabled = true
-                    recordButton.alpha = 1.0f
-
-                    if (audioFile != null) {
-                        Log.i(appTag, "Recording complete, sending to ASR API: ${audioFile.absolutePath}")
-                        appendToChat("Processing speech...\n")
-
-                        // Track the file for cleanup after API call
-                        currentAsrAudioFile = audioFile
-                        openAIHelper.callAsrAPI(audioFile)
-                    } else {
-                        Log.e(appTag, "Recording failed - no audio data")
-                        appendToChat("Recording failed\n")
-                    }
-                }
-            } catch (e: InterruptedException) {
-                Log.d(appTag, "ASR recording timer interrupted")
-                runOnUiThread {
-                    if (isRecording) {
-                        stopAudioRecording()
-                    }
-                    // Re-enable button
-                    recordButton.isEnabled = true
-                    recordButton.alpha = 1.0f
+                if (audioFile != null) {
+                    Log.i(appTag, "Recording complete, sending to ASR API: ${audioFile.absolutePath}")
+                    appendToChat("Processing speech...\n")
+                    openAIHelper.callAsrAPI(audioFile)
+                } else {
+                    Log.e(appTag, "Recording failed - no audio data")
+                    appendToChat("Recording failed\n")
                 }
             }
         }
-        asrRecordingTimer?.start()
     }
 
     private fun initializeViews() {
@@ -258,6 +227,30 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun initializeHelpers() {
+        // Initialize Camera helper
+        cameraHelper = CameraHelper(this, appTag)
+        cameraHelper.setListener(object : CameraHelper.CameraListener {
+            override fun onPhotoCaptured(bitmap: Bitmap) {
+                runOnUiThread {
+                    // Recycle old bitmap to free memory
+                    capturedImage?.recycle()
+                    capturedImage = bitmap
+                    imagePreview.setImageBitmap(capturedImage)
+                    Log.i(appTag, "Photo captured")
+                }
+            }
+
+            override fun onCameraError(error: String) {
+                runOnUiThread {
+                    Toast.makeText(this@ChatActivity, "Camera error: $error", Toast.LENGTH_SHORT).show()
+                }
+            }
+        })
+        cameraHelper.initialize()
+
+        // Initialize Audio Recording helper
+        audioRecordingHelper = AudioRecordingHelper(this, appTag)
+
         // Initialize OpenAI helper
         openAIHelper = OpenAIHelper(this, appTag)
         openAIHelper.setListener(object : OpenAIHelper.OpenAIListener {
@@ -270,7 +263,7 @@ class ChatActivity : AppCompatActivity() {
                     Toast.makeText(this@ChatActivity, "Speech recognized", Toast.LENGTH_SHORT).show()
 
                     // Clean up audio file immediately after ASR completes
-                    cleanupAsrAudioFile()
+                    audioRecordingHelper.cleanupAsrAudioFile()
                 }
             }
 
@@ -281,7 +274,7 @@ class ChatActivity : AppCompatActivity() {
                     Log.e(appTag, "ASR failed: $error")
 
                     // Clean up audio file even on failure
-                    cleanupAsrAudioFile()
+                    audioRecordingHelper.cleanupAsrAudioFile()
                 }
             }
 
@@ -355,9 +348,27 @@ class ChatActivity : AppCompatActivity() {
 
                         // Finalize to start playback
                         streamingAudioPlayer.finalizeStreaming()
+
+                        // Delete TTS file after reading to free storage space
+                        // Delay slightly to ensure file is fully read
+                        cameraHelper.getBackgroundHandler()?.postDelayed({
+                            try {
+                                if (audioFile.exists() && audioFile.delete()) {
+                                    Log.d(appTag, "Deleted TTS file after playback: ${audioFile.name}")
+                                }
+                            } catch (e: Exception) {
+                                Log.e(appTag, "Error deleting TTS file: ${e.message}", e)
+                            }
+                        }, 1000)
                     } catch (e: Exception) {
                         Log.e(appTag, "Error playing TTS audio: ${e.message}", e)
                         Toast.makeText(this@ChatActivity, "Failed to play audio: ${e.message}", Toast.LENGTH_SHORT).show()
+                        // Try to delete the file even on error
+                        try {
+                            audioFile.delete()
+                        } catch (ex: Exception) {
+                            Log.e(appTag, "Error deleting failed TTS file: ${ex.message}", ex)
+                        }
                     }
                 }
             }
@@ -439,211 +450,6 @@ class ChatActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupCamera() {
-        cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
-
-        // Start background thread for camera operations
-        backgroundThread = HandlerThread("CameraBackground").apply { start() }
-        backgroundHandler = Handler(backgroundThread!!.looper)
-    }
-
-    private fun openCamera() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-            != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, "Camera permission not granted", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        try {
-            val cameraId = cameraManager?.cameraIdList?.get(0) ?: return
-
-            cameraManager?.openCamera(cameraId, object : CameraDevice.StateCallback() {
-                override fun onOpened(camera: CameraDevice) {
-                    cameraDevice = camera
-                    Log.i(appTag, "Camera opened")
-                }
-
-                override fun onDisconnected(camera: CameraDevice) {
-                    cameraDevice?.close()
-                    cameraDevice = null
-                    Log.w(appTag, "Camera disconnected")
-                }
-
-                override fun onError(camera: CameraDevice, error: Int) {
-                    cameraDevice?.close()
-                    cameraDevice = null
-                    Log.e(appTag, "Camera error: $error")
-                }
-            }, backgroundHandler)
-        } catch (e: Exception) {
-            Log.e(appTag, "Failed to open camera: ${e.message}", e)
-        }
-    }
-
-    private fun takePhoto() {
-        val camera = cameraDevice
-        if (camera == null) {
-            openCamera()
-            // Retry after a short delay
-            backgroundHandler?.postDelayed({ takePhoto() }, 500)
-            return
-        }
-
-        try {
-            // Close existing capture session and image reader to prevent memory leaks
-            cameraCaptureSession?.close()
-            cameraCaptureSession = null
-            imageReader?.close()
-            imageReader = null
-
-            // Create image reader
-            imageReader = ImageReader.newInstance(640, 480, ImageFormat.JPEG, 1)
-            imageReader?.setOnImageAvailableListener({ reader ->
-                val image = reader.acquireLatestImage()
-                if (image != null) {
-                    val buffer = image.planes[0].buffer
-                    val bytes = ByteArray(buffer.remaining())
-                    buffer.get(bytes)
-                    image.close()
-
-                    // Recycle old bitmap to free memory
-                    capturedImage?.recycle()
-
-                    // Decode bitmap
-                    capturedImage = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-
-                    runOnUiThread {
-                        imagePreview.setImageBitmap(capturedImage)
-                        Log.i(appTag, "Photo captured")
-                    }
-                }
-            }, backgroundHandler)
-
-            // Create capture request
-            val captureRequest = camera.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
-            captureRequest.addTarget(imageReader!!.surface)
-
-            // Create capture session using modern SessionConfiguration API
-            val outputConfiguration = OutputConfiguration(imageReader!!.surface)
-            val sessionConfiguration = SessionConfiguration(
-                SessionConfiguration.SESSION_REGULAR,
-                listOf(outputConfiguration),
-                { command -> backgroundHandler?.post(command) },
-                object : CameraCaptureSession.StateCallback() {
-                    override fun onConfigured(session: CameraCaptureSession) {
-                        cameraCaptureSession = session
-                        session.capture(captureRequest.build(), null, backgroundHandler)
-                    }
-
-                    override fun onConfigureFailed(session: CameraCaptureSession) {
-                        Log.e(appTag, "Camera capture session configuration failed")
-                    }
-                }
-            )
-            camera.createCaptureSession(sessionConfiguration)
-        } catch (e: Exception) {
-            Log.e(appTag, "Failed to take photo: ${e.message}", e)
-        }
-    }
-
-    private fun startAudioRecording() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, "Microphone permission not granted", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val sampleRate = 16000
-        val channelConfig = AudioFormat.CHANNEL_IN_MONO
-        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            sampleRate,
-            channelConfig,
-            audioFormat,
-            bufferSize
-        )
-
-        audioBuffer.reset()
-        isRecording = true
-
-        audioRecord?.startRecording()
-
-        recordingThread = Thread {
-            val buffer = ByteArray(bufferSize)
-            while (isRecording) {
-                val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
-                if (read > 0) {
-                    audioBuffer.write(buffer, 0, read)
-                }
-            }
-        }
-        recordingThread?.start()
-
-        runOnUiThread {
-            appendToChat("Recording audio...\n")
-        }
-    }
-
-    private fun stopAudioRecording(): File? {
-        isRecording = false
-        recordingThread?.join()
-        audioRecord?.stop()
-        audioRecord?.release()
-        audioRecord = null
-
-        if (audioBuffer.size() == 0) {
-            return null
-        }
-
-        // Save as WAV file
-        val audioDir = getExternalFilesDir("audio_recordings") ?: filesDir
-        audioDir.mkdirs()
-        val audioFile = File(audioDir, "audio_${System.currentTimeMillis()}.wav")
-
-        try {
-            FileOutputStream(audioFile).use { fos ->
-                // Write WAV header
-                writeWavHeader(fos, audioBuffer.size(), 16000, 1, 16)
-                // Write audio data
-                audioBuffer.writeTo(fos)
-            }
-
-            audioBuffer.reset()
-            return audioFile
-        } catch (e: Exception) {
-            Log.e(appTag, "Failed to save audio: ${e.message}", e)
-            return null
-        }
-    }
-
-    private fun writeWavHeader(out: FileOutputStream, audioDataSize: Int, sampleRate: Int, channels: Int, bitsPerSample: Int) {
-        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
-
-        // RIFF header
-        header.put("RIFF".toByteArray())
-        header.putInt(36 + audioDataSize)
-        header.put("WAVE".toByteArray())
-
-        // fmt chunk
-        header.put("fmt ".toByteArray())
-        header.putInt(16)  // fmt chunk size
-        header.putShort(1)  // PCM format
-        header.putShort(channels.toShort())
-        header.putInt(sampleRate)
-        header.putInt(sampleRate * channels * bitsPerSample / 8)
-        header.putShort((channels * bitsPerSample / 8).toShort())
-        header.putShort(bitsPerSample.toShort())
-
-        // data chunk
-        header.put("data".toByteArray())
-        header.putInt(audioDataSize)
-
-        out.write(header.array())
-    }
-
     private fun sendMessage(message: String) {
         // Clear previous conversation for new request
         chatHistory.clear()
@@ -664,9 +470,9 @@ class ChatActivity : AppCompatActivity() {
         // Check if we should include image
         val includeImage = SettingsActivity.getIncludeImage(this)
         if (includeImage) {
-            takePhoto()
+            cameraHelper.takePhoto()
             // Wait a bit for camera, then send
-            backgroundHandler?.postDelayed({
+            cameraHelper.getBackgroundHandler()?.postDelayed({
                 sendToOpenAI(message)
             }, 1000)
         } else {
@@ -684,6 +490,18 @@ class ChatActivity : AppCompatActivity() {
 
     private fun appendToChat(text: String) {
         chatHistory.append(text)
+
+        // Prevent unbounded memory growth - limit chat history to 10KB
+        // (This is a safety mechanism; sendMessage already clears history for each new request)
+        if (chatHistory.length > 10240) {
+            // Keep only the last 8KB of text
+            val keepText = chatHistory.substring(chatHistory.length - 8192)
+            chatHistory.clear()
+            chatHistory.append("...[earlier messages truncated]...\n")
+            chatHistory.append(keepText)
+            Log.w(appTag, "Chat history truncated to prevent memory overflow")
+        }
+
         chatTextView.text = chatHistory.toString()
 
         // Scroll to bottom
@@ -695,62 +513,77 @@ class ChatActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
 
-        // Open camera when activity resumes
-        if (backgroundThread == null) {
-            backgroundThread = HandlerThread("CameraBackground").apply { start() }
-            backgroundHandler = Handler(backgroundThread!!.looper)
-        }
-
-        openCamera()
+        // Ensure camera background thread is running and open camera
+        cameraHelper.ensureBackgroundThread()
+        cameraHelper.openCamera()
     }
 
     override fun onPause() {
         super.onPause()
 
         // Stop recording if active
-        if (isRecording) {
-            stopAudioRecording()
+        if (audioRecordingHelper.isRecording()) {
+            audioRecordingHelper.stopRecording()
         }
 
+        // Remove any pending handler callbacks to prevent leaks
+        cameraHelper.clearCallbacks()
+
         // Close camera
-        cameraCaptureSession?.close()
-        cameraCaptureSession = null
-        cameraDevice?.close()
-        cameraDevice = null
-        imageReader?.close()
-        imageReader = null
+        cameraHelper.closeCamera()
+    }
+
+    private fun cleanupAndExit() {
+        // Clear listeners to prevent memory leaks
+        openAIHelper.setListener(null)
+        streamingAudioPlayer.setListener(null)
+        cameraHelper.setListener(null)
+        audioRecordingHelper.setListener(null)
+
+        // Release all helpers
+        audioRecordingHelper.release()
+        streamingAudioPlayer.release()
+        cameraHelper.release()
+
+        // Recycle bitmap to free memory
+        capturedImage?.recycle()
+        capturedImage = null
+
+        // Clear image preview to release bitmap reference
+        imagePreview.setImageBitmap(null)
+
+        // Clean up temp files immediately
+        cleanupTempFiles()
+
+        // Use finishAffinity() to completely exit the app and clear all activities
+        finishAffinity()
+
+        Log.i(appTag, "App exit complete")
     }
 
     override fun onDestroy() {
         super.onDestroy()
 
-        // Stop ASR recording timer if active
-        asrRecordingTimer?.interrupt()
-        asrRecordingTimer = null
-
-        // Stop background thread
-        backgroundThread?.quitSafely()
-        try {
-            backgroundThread?.join()
-            backgroundThread = null
-            backgroundHandler = null
-        } catch (e: InterruptedException) {
-            Log.e(appTag, "Error stopping background thread", e)
-        }
+        // Clear listeners to prevent memory leaks
+        openAIHelper.setListener(null)
+        streamingAudioPlayer.setListener(null)
+        cameraHelper.setListener(null)
+        audioRecordingHelper.setListener(null)
 
         // Release resources
+        audioRecordingHelper.release()
         openAIHelper.release()
         streamingAudioPlayer.release()
+        cameraHelper.release()
 
         // Recycle captured image to free memory
         capturedImage?.recycle()
         capturedImage = null
 
-        // Clean up temp files
-        val audioDir = getExternalFilesDir("audio_recordings")
-        audioDir?.listFiles()?.forEach { it.delete() }
+        // Clear image preview to release bitmap reference
+        imagePreview.setImageBitmap(null)
 
-        val ttsDir = getExternalFilesDir("tts_audio")
-        ttsDir?.listFiles()?.forEach { it.delete() }
+        // Clean up temp files
+        cleanupTempFiles()
     }
 }

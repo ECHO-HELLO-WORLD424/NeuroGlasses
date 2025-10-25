@@ -212,8 +212,9 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
 
     /**
      * Set the listener for AI API callbacks
+     * Pass null to clear the listener and prevent memory leaks
      */
-    fun setListener(listener: OpenAIListener) {
+    fun setListener(listener: OpenAIListener?) {
         this.listener = listener
     }
 

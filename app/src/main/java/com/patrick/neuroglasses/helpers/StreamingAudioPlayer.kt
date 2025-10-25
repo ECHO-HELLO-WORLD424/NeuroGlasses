@@ -39,7 +39,11 @@ class StreamingAudioPlayer(private val appTag: String = "StreamingAudioPlayer") 
 
     private var listener: PlaybackListener? = null
 
-    fun setListener(listener: PlaybackListener) {
+    /**
+     * Set the listener for playback callbacks
+     * Pass null to clear the listener and prevent memory leaks
+     */
+    fun setListener(listener: PlaybackListener?) {
         this.listener = listener
     }
 
