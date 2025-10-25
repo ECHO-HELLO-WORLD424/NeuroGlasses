@@ -241,6 +241,25 @@ class ChatActivity : AppCompatActivity() {
             override fun onTtsComplete(audioFile: File) {
                 runOnUiThread {
                     Log.i(appTag, "TTS complete: ${audioFile.absolutePath}")
+
+                    // Play the complete audio file using StreamingAudioPlayer
+                    try {
+                        // Initialize the player
+                        streamingAudioPlayer.initializeStreaming()
+
+                        // Read the complete audio file
+                        val audioData = audioFile.readBytes()
+                        Log.i(appTag, "Playing complete audio file: ${audioData.size} bytes")
+
+                        // Feed the entire file as a single chunk
+                        streamingAudioPlayer.addChunk(audioData)
+
+                        // Finalize to start playback
+                        streamingAudioPlayer.finalizeStreaming()
+                    } catch (e: Exception) {
+                        Log.e(appTag, "Error playing TTS audio: ${e.message}", e)
+                        Toast.makeText(this@ChatActivity, "Failed to play audio: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
 

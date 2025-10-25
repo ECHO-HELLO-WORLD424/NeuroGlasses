@@ -3,14 +3,13 @@ package com.patrick.neuroglasses.helpers
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
-import android.media.MediaCodec
-import android.media.MediaFormat
 import android.util.Log
 import java.util.concurrent.LinkedBlockingQueue
 
 /**
- * Streaming audio player for MP3/audio chunks
- * Uses in-memory queue with MediaCodec + AudioTrack for true streaming playback
+ * Streaming audio player for PCM audio chunks
+ * Uses in-memory queue with AudioTrack for true streaming playback
+ * PCM format allows feeding arbitrary chunks without frame boundary issues
  */
 class StreamingAudioPlayer(private val appTag: String = "StreamingAudioPlayer") {
 
@@ -18,16 +17,16 @@ class StreamingAudioPlayer(private val appTag: String = "StreamingAudioPlayer") 
     private val audioChunkQueue = LinkedBlockingQueue<ByteArray>()
 
     private var audioTrack: AudioTrack? = null
-    private var mediaCodec: MediaCodec? = null
 
     private var isPlaying = false
     private var playbackThread: Thread? = null
     private var shouldContinuePlaying = true
     private var isStreamComplete = false
 
-    // Audio format parameters (will be set when codec is configured)
-    private var sampleRate = 24000 // Default, will be updated from MediaFormat
-    private var channelCount = 1 // Default, will be updated from MediaFormat
+    // Audio format parameters for PCM from TTS API
+    // Default: 44.1kHz, mono, 16-bit PCM
+    private val sampleRate = 44100
+    private val channelCount = 1
 
     /**
      * Listener interface for playback events
@@ -79,6 +78,12 @@ class StreamingAudioPlayer(private val appTag: String = "StreamingAudioPlayer") 
                 return
             }
 
+            // Filter out small chunks that can cause hissing/clicking sounds
+            if (chunk.size < 100) {
+                Log.v(appTag, "Skipping small chunk: ${chunk.size} bytes (< 100 bytes)")
+                return
+            }
+
             audioChunkQueue.offer(chunk)
             Log.v(appTag, "Added chunk: ${chunk.size} bytes (queue size: ${audioChunkQueue.size})")
 
@@ -126,166 +131,80 @@ class StreamingAudioPlayer(private val appTag: String = "StreamingAudioPlayer") 
     }
 
     /**
-     * Play audio using MediaCodec and AudioTrack with in-memory queue
+     * Play PCM audio using AudioTrack with in-memory queue
+     * Much simpler than MP3 - no decoding needed, just write directly to AudioTrack
      */
     private fun playStreamingAudio() {
         try {
-            // Setup MediaCodec for MP3 decoding
-            val mime = "audio/mpeg" // MP3
-            mediaCodec = MediaCodec.createDecoderByType(mime)
+            // Setup AudioTrack for PCM playback
+            val channelConfig = if (channelCount == 1)
+                AudioFormat.CHANNEL_OUT_MONO
+            else
+                AudioFormat.CHANNEL_OUT_STEREO
 
-            // Configure with basic MP3 format
-            // We'll get the actual format from the codec after we feed it data
-            val format = MediaFormat.createAudioFormat(mime, sampleRate, channelCount)
-            mediaCodec?.configure(format, null, null, 0)
-            mediaCodec?.start()
+            val minBufferSize = AudioTrack.getMinBufferSize(
+                sampleRate,
+                channelConfig,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
 
-            Log.i(appTag, "MediaCodec started for MP3 decoding")
+            audioTrack = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(channelConfig)
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .build()
+                )
+                .setBufferSizeInBytes(minBufferSize * 4)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
 
-            // Track if we've initialized AudioTrack yet
-            var audioTrackInitialized = false
+            audioTrack?.play()
+            Log.i(appTag, "AudioTrack initialized and playing (${sampleRate}Hz, ${channelCount}ch)")
 
             // Notify playback started
             listener?.onPlaybackStarted()
 
-            val info = MediaCodec.BufferInfo()
             var totalChunksProcessed = 0
-            var inputEOS = false
-            var outputEOS = false
+            var totalBytesWritten = 0L
 
-            // Main decode loop
-            while (shouldContinuePlaying && !outputEOS) {
-
-                // INPUT: Feed encoded MP3 data to codec
-                if (!inputEOS) {
-                    val inputBufferIndex = mediaCodec?.dequeueInputBuffer(10000) ?: -1
-
-                    if (inputBufferIndex >= 0) {
-                        val inputBuffer = mediaCodec?.getInputBuffer(inputBufferIndex)
-
-                        if (inputBuffer != null) {
-                            inputBuffer.clear()
-
-                            // Try to get a chunk from the queue
-                            val chunk = if (isStreamComplete && audioChunkQueue.isEmpty()) {
-                                null // No more data
-                            } else {
-                                // Wait a bit for data if stream is not complete
-                                audioChunkQueue.poll(
-                                    if (isStreamComplete) 0 else 100,
-                                    java.util.concurrent.TimeUnit.MILLISECONDS
-                                )
-                            }
-
-                            if (chunk != null) {
-                                // We have data - feed it to the codec
-                                inputBuffer.put(chunk)
-                                mediaCodec?.queueInputBuffer(
-                                    inputBufferIndex,
-                                    0,
-                                    chunk.size,
-                                    0,
-                                    0
-                                )
-                                totalChunksProcessed++
-                                Log.v(appTag, "Fed chunk $totalChunksProcessed to codec: ${chunk.size} bytes")
-                            } else if (isStreamComplete) {
-                                // Stream is complete and no more chunks - signal EOS
-                                Log.d(appTag, "Signaling end of stream to codec")
-                                mediaCodec?.queueInputBuffer(
-                                    inputBufferIndex,
-                                    0,
-                                    0,
-                                    0,
-                                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                                )
-                                inputEOS = true
-                            } else {
-                                // No data available yet but stream not complete - queue empty buffer
-                                mediaCodec?.queueInputBuffer(inputBufferIndex, 0, 0, 0, 0)
-                            }
-                        }
-                    }
+            // Main playback loop - just write PCM chunks directly to AudioTrack
+            while (shouldContinuePlaying) {
+                // Try to get a chunk from the queue
+                val chunk = if (isStreamComplete && audioChunkQueue.isEmpty()) {
+                    null // No more data
+                } else {
+                    // Wait a bit for data if stream is not complete
+                    audioChunkQueue.poll(
+                        if (isStreamComplete) 0 else 100,
+                        java.util.concurrent.TimeUnit.MILLISECONDS
+                    )
                 }
 
-                // OUTPUT: Get decoded PCM data and write to AudioTrack
-                val outputBufferIndex = mediaCodec?.dequeueOutputBuffer(info, 10000) ?: -1
-
-                when {
-                    outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        // Format changed - initialize AudioTrack with actual parameters
-                        val outputFormat = mediaCodec?.outputFormat
-                        if (outputFormat != null && !audioTrackInitialized) {
-                            sampleRate = outputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                            channelCount = outputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-
-                            Log.i(appTag, "Output format: sample rate=$sampleRate, channels=$channelCount")
-
-                            // Setup AudioTrack with actual format
-                            val channelConfig = if (channelCount == 1)
-                                AudioFormat.CHANNEL_OUT_MONO
-                            else
-                                AudioFormat.CHANNEL_OUT_STEREO
-
-                            val minBufferSize = AudioTrack.getMinBufferSize(
-                                sampleRate,
-                                channelConfig,
-                                AudioFormat.ENCODING_PCM_16BIT
-                            )
-
-                            audioTrack = AudioTrack.Builder()
-                                .setAudioAttributes(
-                                    AudioAttributes.Builder()
-                                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                                        .build()
-                                )
-                                .setAudioFormat(
-                                    AudioFormat.Builder()
-                                        .setSampleRate(sampleRate)
-                                        .setChannelMask(channelConfig)
-                                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                                        .build()
-                                )
-                                .setBufferSizeInBytes(minBufferSize * 4)
-                                .setTransferMode(AudioTrack.MODE_STREAM)
-                                .build()
-
-                            audioTrack?.play()
-                            audioTrackInitialized = true
-                            Log.i(appTag, "AudioTrack initialized and playing")
-                        }
-                    }
-
-                    outputBufferIndex >= 0 -> {
-                        val outputBuffer = mediaCodec?.getOutputBuffer(outputBufferIndex)
-
-                        if (outputBuffer != null && info.size > 0 && audioTrackInitialized) {
-                            // Write PCM data to AudioTrack
-                            val pcmData = ByteArray(info.size)
-                            outputBuffer.get(pcmData)
-
-                            val written = audioTrack?.write(pcmData, 0, pcmData.size) ?: 0
-                            Log.v(appTag, "Wrote $written bytes to AudioTrack")
-                        }
-
-                        mediaCodec?.releaseOutputBuffer(outputBufferIndex, false)
-
-                        // Check for end of stream
-                        if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
-                            Log.d(appTag, "Reached end of output stream")
-                            outputEOS = true
-                        }
-                    }
+                if (chunk != null && chunk.isNotEmpty()) {
+                    // Write PCM data directly to AudioTrack
+                    val written = audioTrack?.write(chunk, 0, chunk.size) ?: 0
+                    totalChunksProcessed++
+                    totalBytesWritten += written
+                    Log.v(appTag, "Wrote chunk $totalChunksProcessed to AudioTrack: $written bytes")
+                } else if (isStreamComplete && audioChunkQueue.isEmpty()) {
+                    // Stream is complete and no more chunks
+                    Log.d(appTag, "All chunks processed, ending playback")
+                    break
                 }
             }
 
             // Wait a bit for AudioTrack to finish playing buffered data
-            if (audioTrackInitialized) {
-                Thread.sleep(200)
-            }
+            Thread.sleep(200)
 
-            Log.i(appTag, "Playback completed successfully (processed $totalChunksProcessed chunks)")
+            Log.i(appTag, "Playback completed successfully (processed $totalChunksProcessed chunks, $totalBytesWritten bytes)")
             listener?.onPlaybackCompleted()
 
         } catch (e: Exception) {
@@ -323,18 +242,7 @@ class StreamingAudioPlayer(private val appTag: String = "StreamingAudioPlayer") 
      */
     private fun cleanupPlaybackResources() {
         try {
-            // Clean up MediaCodec first
-            mediaCodec?.apply {
-                try {
-                    stop()
-                } catch (e: IllegalStateException) {
-                    Log.w(appTag, "MediaCodec already stopped: ${e.message}")
-                }
-                release()
-            }
-            mediaCodec = null
-
-            // Then clean up AudioTrack
+            // Clean up AudioTrack
             audioTrack?.apply {
                 try {
                     // Pause first to stop playback immediately

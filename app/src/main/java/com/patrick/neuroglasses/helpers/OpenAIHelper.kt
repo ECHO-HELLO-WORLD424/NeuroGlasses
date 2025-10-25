@@ -77,7 +77,11 @@ data class AsrResponse(
 data class TtsRequest(
     val model: String,
     val input: String,
-    val voice: String
+    val voice: String,
+    @SerializedName("response_format")
+    val responseFormat: String = "pcm",
+    @SerializedName("sample_rate")
+    val sampleRate: Int = 44100
 )
 
 /**
@@ -511,7 +515,7 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
      * @param outputDir The directory to save the audio file
      * @param streaming If true, streams audio chunks as they arrive; if false, waits for complete file
      */
-    fun callTtsAPI(text: String, outputDir: File, streaming: Boolean = true) {
+    fun callTtsAPI(text: String, outputDir: File, streaming: Boolean = false) {
         Log.d(appTag, "TTS API called with text: $text (streaming: $streaming)")
 
         if (!outputDir.exists()) {
@@ -527,11 +531,12 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
 
         Thread {
             try {
-                // Create the TTS request
+                // Create the TTS request with PCM format for streaming
                 val request = TtsRequest(
                     model = getTtsModel(),
                     input = text,
-                    voice = getTtsVoice()
+                    voice = getTtsVoice(),
+                    responseFormat = "pcm"
                 )
 
                 // Convert request to JSON
@@ -606,7 +611,7 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
 
             // Create file to save complete audio for later use
             val timestamp = System.currentTimeMillis()
-            val audioFile = File(outputDir, "tts_result_$timestamp.mp3")
+            val audioFile = File(outputDir, "tts_result_$timestamp.pcm")
             val fileOutputStream = audioFile.outputStream()
 
             try {
@@ -674,7 +679,7 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
             val audioBytes = response.body?.bytes()
             if (audioBytes != null && audioBytes.isNotEmpty()) {
                 val timestamp = System.currentTimeMillis()
-                val audioFile = File(outputDir, "tts_result_$timestamp.mp3")
+                val audioFile = File(outputDir, "tts_result_$timestamp.pcm")
 
                 audioFile.outputStream().use { fileOut ->
                     fileOut.write(audioBytes)
