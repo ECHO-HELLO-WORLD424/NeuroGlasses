@@ -372,6 +372,12 @@ class ChatActivity : AppCompatActivity() {
         }
 
         try {
+            // Close existing capture session and image reader to prevent memory leaks
+            cameraCaptureSession?.close()
+            cameraCaptureSession = null
+            imageReader?.close()
+            imageReader = null
+
             // Create image reader
             imageReader = ImageReader.newInstance(640, 480, ImageFormat.JPEG, 1)
             imageReader?.setOnImageAvailableListener({ reader ->
@@ -381,6 +387,9 @@ class ChatActivity : AppCompatActivity() {
                     val bytes = ByteArray(buffer.remaining())
                     buffer.get(bytes)
                     image.close()
+
+                    // Recycle old bitmap to free memory
+                    capturedImage?.recycle()
 
                     // Decode bitmap
                     capturedImage = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
@@ -529,7 +538,8 @@ class ChatActivity : AppCompatActivity() {
         // Display new user message
         appendToChat("You: $message\n")
 
-        // Clear previous image for new request
+        // Clear previous image for new request and recycle to free memory
+        capturedImage?.recycle()
         capturedImage = null
         imagePreview.setImageBitmap(null)
 
@@ -630,6 +640,10 @@ class ChatActivity : AppCompatActivity() {
         // Release resources
         openAIHelper.release()
         streamingAudioPlayer.release()
+
+        // Recycle captured image to free memory
+        capturedImage?.recycle()
+        capturedImage = null
 
         // Clean up temp files
         val audioDir = getExternalFilesDir("audio_recordings")

@@ -2,6 +2,8 @@ package com.patrick.neuroglasses.helpers
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.util.Base64
 import android.util.Log
 import com.google.gson.Gson
@@ -86,6 +88,11 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
 
     private val gson = Gson()
 
+    // Cached OkHttpClient instances to avoid creating new clients for each request
+    private var standardClient: OkHttpClient? = null
+    private var streamingClient: OkHttpClient? = null
+    private var lastTimeoutSeconds: Long = 0
+
     // Get configuration from SharedPreferences
     private fun getApiBaseUrl(): String = SettingsActivity.getApiBaseUrl(context)
     private fun getApiToken(): String = SettingsActivity.getApiToken(context)
@@ -97,16 +104,35 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
     private fun getTtsModel(): String = SettingsActivity.getTtsModel(context)
     private fun getTtsVoice(): String = SettingsActivity.getTtsVoice(context)
 
-    // Build OkHttpClient with configurable timeout
+    // Build OkHttpClient with configurable timeout and caching
     private fun getClient(isStreaming: Boolean = false): OkHttpClient {
         val timeoutSeconds = getApiTimeout().toLong()
-        return OkHttpClient.Builder()
-            .connectTimeout(timeoutSeconds, TimeUnit.SECONDS)
-            // For streaming, use a longer read timeout to allow for slower chunk delivery
-            // but still respect the configured timeout as a baseline
-            .readTimeout(if (isStreaming) timeoutSeconds * 2 else timeoutSeconds, TimeUnit.SECONDS)
-            .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
-            .build()
+
+        // Rebuild clients if timeout changed
+        if (timeoutSeconds != lastTimeoutSeconds) {
+            standardClient = null
+            streamingClient = null
+            lastTimeoutSeconds = timeoutSeconds
+        }
+
+        // Return cached client or create new one
+        return if (isStreaming) {
+            streamingClient ?: OkHttpClient.Builder()
+                .connectTimeout(timeoutSeconds, TimeUnit.SECONDS)
+                .readTimeout(timeoutSeconds * 2, TimeUnit.SECONDS)
+                .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
+                // Add DNS configuration for better connectivity
+                .dns(CustomDns())
+                .build().also { streamingClient = it }
+        } else {
+            standardClient ?: OkHttpClient.Builder()
+                .connectTimeout(timeoutSeconds, TimeUnit.SECONDS)
+                .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
+                .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
+                // Add DNS configuration for better connectivity
+                .dns(CustomDns())
+                .build().also { standardClient = it }
+        }
     }
 
     private fun getChatApiUrl(): String = "${getApiBaseUrl()}/chat/completions"
@@ -188,6 +214,18 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
     }
 
     /**
+     * Check if device has internet connectivity
+     */
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+               capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+
+    /**
      * Call ASR API to convert audio to text
      * @param audioFile The audio file to process
      */
@@ -197,6 +235,13 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
         if (!audioFile.exists()) {
             Log.e(appTag, "Audio file does not exist: ${audioFile.path}")
             listener?.onAsrFailed("Audio file not found")
+            return
+        }
+
+        // Check network connectivity
+        if (!isNetworkAvailable()) {
+            Log.e(appTag, "No network connectivity")
+            listener?.onAsrFailed("No internet connection. Please check your network settings.")
             return
         }
 
@@ -269,6 +314,13 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
         Log.d(appTag, "OpenAI Streaming API called")
         Log.d(appTag, "Instruction: $instruction")
         Log.d(appTag, "Has image: ${image != null}")
+
+        // Check network connectivity
+        if (!isNetworkAvailable()) {
+            Log.e(appTag, "No network connectivity")
+            listener?.onOpenAIFailed("No internet connection. Please check your network settings.")
+            return
+        }
 
         Thread {
             try {
@@ -444,9 +496,13 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
      */
     private fun bitmapToBase64(bitmap: Bitmap): String {
         val byteArrayOutputStream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
-        val byteArray = byteArrayOutputStream.toByteArray()
-        return Base64.encodeToString(byteArray, Base64.NO_WRAP)
+        try {
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
+            val byteArray = byteArrayOutputStream.toByteArray()
+            return Base64.encodeToString(byteArray, Base64.NO_WRAP)
+        } finally {
+            byteArrayOutputStream.close()
+        }
     }
 
     /**
@@ -460,6 +516,13 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
 
         if (!outputDir.exists()) {
             outputDir.mkdirs()
+        }
+
+        // Check network connectivity
+        if (!isNetworkAvailable()) {
+            Log.e(appTag, "No network connectivity")
+            listener?.onTtsFailed("No internet connection. Please check your network settings.")
+            return
         }
 
         Thread {
@@ -631,6 +694,43 @@ class OpenAIHelper(private val context: Context, private val appTag: String = "O
      */
     fun release() {
         listener = null
+        // Clear cached HTTP clients
+        standardClient = null
+        streamingClient = null
         Log.d(appTag, "OpenAIHelper released")
+    }
+
+    /**
+     * Custom DNS implementation with fallback DNS servers
+     * Helps resolve connectivity issues when default DNS fails
+     */
+    private inner class CustomDns : okhttp3.Dns {
+        override fun lookup(hostname: String): List<java.net.InetAddress> {
+            try {
+                // First try system DNS
+                return okhttp3.Dns.SYSTEM.lookup(hostname)
+            } catch (e: Exception) {
+                Log.w(appTag, "System DNS failed for $hostname, trying fallback DNS: ${e.message}")
+
+                // Fallback to Google DNS (8.8.8.8 and 8.8.4.4)
+                try {
+                    val addresses = mutableListOf<java.net.InetAddress>()
+
+                    // Try using InetAddress.getAllByName as backup
+                    val fallbackAddresses = java.net.InetAddress.getAllByName(hostname)
+                    addresses.addAll(fallbackAddresses)
+
+                    if (addresses.isNotEmpty()) {
+                        Log.d(appTag, "Fallback DNS succeeded for $hostname")
+                        return addresses
+                    }
+                } catch (fallbackError: Exception) {
+                    Log.e(appTag, "Fallback DNS also failed for $hostname: ${fallbackError.message}")
+                }
+
+                // If all fails, rethrow the original exception
+                throw e
+            }
+        }
     }
 }
