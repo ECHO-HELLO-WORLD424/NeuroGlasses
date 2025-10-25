@@ -7,9 +7,6 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import com.patrick.neuroglasses.R
 
 class SettingsActivity : AppCompatActivity() {
@@ -282,26 +279,5 @@ class SettingsActivity : AppCompatActivity() {
         ttsVoiceEditText.setText(DEFAULT_TTS_VOICE)
 
         Toast.makeText(this, "Reset to default values", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun enableFullscreenMode() {
-        actionBar?.hide()
-        supportActionBar?.hide()
-
-        // Use WindowCompat for modern fullscreen (API 30+)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.apply {
-            hide(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        // Disabled: Full screen mode doesn't align with glasses orientation
-        // if (hasFocus) {
-        //     enableFullscreenMode()
-        // }
     }
 }

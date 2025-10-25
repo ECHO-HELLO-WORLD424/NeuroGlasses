@@ -159,7 +159,7 @@ class AudioRecordingHelper(
                 currentAsrAudioFile = audioFile
                 onComplete(audioFile)
             } catch (e: InterruptedException) {
-                Log.d(appTag, "ASR recording timer interrupted")
+                Log.d(appTag, "ASR recording timer interrupted: ${e.stackTrace}")
                 if (isRecording) {
                     stopRecording()
                 }

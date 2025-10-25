@@ -295,11 +295,6 @@ class StreamingAudioPlayer(private val appTag: String = "StreamingAudioPlayer") 
     }
 
     /**
-     * Check if currently playing
-     */
-    fun isPlaying(): Boolean = isPlaying
-
-    /**
      * Release all resources
      */
     fun release() {
